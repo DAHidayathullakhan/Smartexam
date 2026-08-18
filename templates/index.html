@@ -1,0 +1,272 @@
+{% extends 'base.html' %}
+
+{% block title %}Smart Online Examination Platform - Secure EdTech Testing{% endblock %}
+
+{% block content %}
+
+<!-- Hero Section with Background Overlay -->
+<section class="hero-section">
+    <div class="container">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-7">
+                <div class="hero-glass-card">
+                    <div class="hero-badge">
+                        <i class="fa-solid fa-shield-halved"></i> Production-Grade Online Testing
+                    </div>
+                    <h1 class="hero-title">
+                        SMART ONLINE EXAMINATION PLATFORM
+                    </h1>
+                    <p class="hero-subtitle">
+                        Conduct secure examinations, monitor student activity in real-time, and analyze academic performance from one powerful unified EdTech platform.
+                    </p>
+                    <div class="d-flex flex-wrap gap-3">
+                        <a href="{{ url_for('exams') }}" class="btn btn-primary-gradient">
+                            START EXAM <i class="fa-solid fa-arrow-right ms-2"></i>
+                        </a>
+                        <a href="#features" class="btn btn-outline-custom">
+                            EXPLORE PLATFORM <i class="fa-solid fa-compass ms-2"></i>
+                        </a>
+                    </div>
+                    <div class="trust-indicators">
+                        <div class="trust-item">
+                            <i class="fa-solid fa-circle-check"></i> Secure Examination
+                        </div>
+                        <div class="trust-item">
+                            <i class="fa-solid fa-circle-check"></i> Real-Time Camera Monitoring
+                        </div>
+                        <div class="trust-item">
+                            <i class="fa-solid fa-circle-check"></i> Instant Result Analytics
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Graphic / Interactive Hero Highlight Card -->
+            <div class="col-lg-5">
+                <div class="card border-0 shadow-lg overflow-hidden rounded-4 text-white" style="background: linear-gradient(145deg, #1c2541, #0b132b); border: 1px solid rgba(255,255,255,0.15);">
+                    <div class="card-header bg-transparent border-bottom border-secondary d-flex justify-content-between align-items-center p-3">
+                        <span class="badge bg-danger px-3 py-2"><i class="fa-solid fa-circle text-white me-1 fs-6"></i> PROCTORING LIVE</span>
+                        <small class="text-light"><i class="fa-regular fa-clock"></i> 20:00 Mins</small>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center gap-3 mb-4">
+                            <div class="camera-preview-box text-center d-flex align-items-center justify-content-center bg-dark text-muted" style="width: 100px; height: 75px;">
+                                <div>
+                                    <i class="fa-solid fa-user-shield fs-4 text-success"></i>
+                                    <div style="font-size: 0.65rem;" class="mt-1 text-light">Webcam Active</div>
+                                </div>
+                            </div>
+                            <div>
+                                <h6 class="mb-1 text-white fw-bold">Python Mid-Term Certification</h6>
+                                <span class="badge bg-primary">CS301</span>
+                                <div class="small text-muted mt-1">Student: Rahul Sharma (CS2026-101)</div>
+                            </div>
+                        </div>
+
+                        <div class="p-3 rounded-3 mb-3" style="background: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.2);">
+                            <div class="d-flex justify-content-between small text-light mb-1">
+                                <span>Exam Violation Counter</span>
+                                <span class="text-success fw-bold">0 Tab Switches (Clean)</span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-success" style="width: 100%"></div>
+                            </div>
+                        </div>
+
+                        <a href="{{ url_for('login') }}" class="btn btn-sm btn-primary-gradient w-100 py-2">
+                            Demo Teacher Monitoring Live <i class="fa-solid fa-arrow-right ms-1"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Statistics Highlights -->
+<section class="stats-container container">
+    <div class="row g-4">
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fa-solid fa-pen-nib"></i>
+                </div>
+                <div class="stat-number" data-target="{{ stats.exams }}">10,000+</div>
+                <div class="stat-label">Exams Conducted</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #ecfdf5; color: #10b981;">
+                    <i class="fa-solid fa-user-graduate"></i>
+                </div>
+                <div class="stat-number" data-target="{{ stats.students }}">50,000+</div>
+                <div class="stat-label">Active Students</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #fef3c7; color: #f59e0b;">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <div class="stat-number" data-target="99">99.8%</div>
+                <div class="stat-label">Proctoring Accuracy</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #f3e8ff; color: #7c3aed;">
+                    <i class="fa-solid fa-video"></i>
+                </div>
+                <div class="stat-number" data-target="{{ stats.classes }}">500+</div>
+                <div class="stat-label">Live Virtual Classes</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Platform Feature Showcase Grid -->
+<section id="features" class="py-5 mt-5">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-tag">Enterprise EdTech Capabilities</div>
+            <h2 class="fw-800 fs-1">Everything You Need for Secure Online Learning</h2>
+            <p class="text-muted max-w-600 mx-auto">
+                Built from the ground up to support high-stakes university examinations, live virtual classrooms, unit-wise notes repository, and instant result analytics.
+            </p>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-4 col-md-6">
+                <div class="feature-card">
+                    <div class="feature-icon-badge">
+                        <i class="fa-solid fa-lock"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">🔐 Secure Examination</h5>
+                    <p class="text-muted small">
+                        Automated exam engine with question randomization, strict timer limits, instant score evaluation, and grade calculation.
+                    </p>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6">
+                <div class="feature-card">
+                    <div class="feature-icon-badge" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                        <i class="fa-solid fa-video"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">📹 Camera Monitoring</h5>
+                    <p class="text-muted small">
+                        Live browser webcam preview verification using HTML5 media devices API with transparent user permission requests.
+                    </p>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6">
+                <div class="feature-card">
+                    <div class="feature-icon-badge" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">⚠️ Tab-Switch Alerts</h5>
+                    <p class="text-muted small">
+                        Detect window blur and tab switching using Page Visibility API, recording timestamped violation logs for teacher review.
+                    </p>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6">
+                <div class="feature-card">
+                    <div class="feature-icon-badge" style="background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);">
+                        <i class="fa-solid fa-stopwatch"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">⏱️ Smart Exam Timer</h5>
+                    <p class="text-muted small">
+                        Real-time countdown timer that automatically saves student progress and submits answers when time reaches zero.
+                    </p>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6">
+                <div class="feature-card">
+                    <div class="feature-icon-badge" style="background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);">
+                        <i class="fa-solid fa-chart-line"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">📊 Result Analytics</h5>
+                    <p class="text-muted small">
+                        Interactive Chart.js subject comparison bar graphs, correct/wrong doughnut charts, and printable PDF result reports.
+                    </p>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6">
+                <div class="feature-card">
+                    <div class="feature-icon-badge" style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);">
+                        <i class="fa-solid fa-chalkboard-user"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">🖊️ Interactive ViewBoard</h5>
+                    <p class="text-muted small">
+                        Digital Canvas whiteboard tool with pen, eraser, line, circle, rectangle shapes, color picker, and PNG export function.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Subject Showcase Grid -->
+<section class="py-5 bg-white border-top border-bottom">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-end mb-4">
+            <div>
+                <div class="section-tag">Academic Catalog</div>
+                <h2 class="fw-bold fs-2 m-0">Featured Subjects & Courses</h2>
+            </div>
+            <a href="{{ url_for('subjects') }}" class="btn btn-outline-custom">View All Subjects <i class="fa-solid fa-arrow-right"></i></a>
+        </div>
+
+        <div class="row g-4">
+            {% for s in subjects[:4] %}
+                <div class="col-lg-3 col-md-6">
+                    <div class="subject-card">
+                        <div class="subject-card-header">
+                            <span class="subject-badge">{{ s.code }}</span>
+                            <i class="{{ s.icon }} fa-3x mb-3 text-info"></i>
+                            <h5 class="fw-bold text-white mb-1">{{ s.name }}</h5>
+                            <p class="small text-light opacity-75 m-0">{{ s.units|length }} Units Available</p>
+                        </div>
+                        <div class="card-body p-3">
+                            <p class="small text-muted mb-3">{{ s.description[:85] }}...</p>
+                            <div class="d-flex gap-2">
+                                <a href="{{ url_for('notes', subject_id=s.id) }}" class="btn btn-sm btn-outline-custom flex-grow-1">
+                                    <i class="fa-solid fa-file-lines me-1"></i> Notes
+                                </a>
+                                <a href="{{ url_for('exams') }}" class="btn btn-sm btn-primary-gradient flex-grow-1">
+                                    <i class="fa-solid fa-pen me-1"></i> Exam
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<!-- Call To Action -->
+<section class="py-5 text-white" style="background: var(--primary-gradient);">
+    <div class="container text-center py-4">
+        <h2 class="fw-800 fs-1 mb-3">Ready to Conduct Secure Online Examinations?</h2>
+        <p class="fs-5 max-w-600 mx-auto text-light opacity-90 mb-4">
+            Join thousands of educators and students leveraging our advanced proctoring, live viewboard, and academic analytics platform.
+        </p>
+        <div class="d-flex justify-content-center gap-3">
+            <a href="{{ url_for('register') }}" class="btn btn-light btn-lg px-4 py-3 fw-bold text-primary shadow-lg">
+                Create Free Account <i class="fa-solid fa-user-plus ms-2"></i>
+            </a>
+            <a href="{{ url_for('login') }}" class="btn btn-outline-light btn-lg px-4 py-3 fw-bold">
+                Log In Demo Accounts <i class="fa-solid fa-right-to-bracket ms-2"></i>
+            </a>
+        </div>
+    </div>
+</section>
+
+{% endblock %}

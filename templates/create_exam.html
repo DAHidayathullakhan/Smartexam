@@ -1,0 +1,328 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Examination - Exam Code Generator{% endblock %}
+
+{% block content %}
+<section class="py-4 bg-light">
+    <div class="container">
+        
+        <!-- If Exam Was Just Created: Display YOUR EXAM CODE Card -->
+        {% if created_exam %}
+            <div class="card border-0 shadow-lg rounded-4 overflow-hidden mb-5 text-white" style="background: linear-gradient(145deg, #0b132b, #1c2541, #1d4ed8);">
+                <div class="card-header bg-transparent border-bottom border-secondary text-center p-4">
+                    <span class="badge bg-success px-3 py-2 fs-6 fw-bold mb-2">
+                        <i class="fa-solid fa-circle-check me-1"></i> EXAM CREATED SUCCESSFULLY
+                    </span>
+                    <h2 class="fw-800 text-white mb-0">{{ created_exam.title }}</h2>
+                    <p class="text-light opacity-75 small m-0 mt-1">Subject: {{ created_exam.subject.name }} ({{ created_exam.subject.code }}) | Duration: {{ created_exam.duration_minutes }} Mins</p>
+                </div>
+
+                <div class="card-body p-5 text-center">
+                    <div class="small text-uppercase fw-bold text-light opacity-75 mb-2" style="letter-spacing: 2px;">
+                        YOUR EXAM CODE
+                    </div>
+
+                    <!-- Prominent Exam Code Display Box -->
+                    <div class="p-4 mx-auto rounded-4 my-3 shadow-lg" style="max-width: 440px; background: rgba(255, 255, 255, 0.12); backdrop-filter: blur(16px); border: 2px dashed rgba(255, 255, 255, 0.4);">
+                        <div class="display-3 fw-800 text-warning" id="createdExamCodeText" style="letter-spacing: 6px; font-family: 'Space Grotesk', monospace;">
+                            # {{ created_exam.exam_code }}
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap justify-content-center gap-3 mt-4">
+                        <button type="button" class="btn btn-warning text-dark font-weight-bold px-4 py-2" onclick="copyExamCode('{{ created_exam.exam_code }}')">
+                            <i class="fa-solid fa-copy me-1"></i> COPY CODE
+                        </button>
+                        <button type="button" class="btn btn-light font-weight-bold text-primary px-4 py-2" onclick="shareExamCode('{{ created_exam.title|e }}', '{{ created_exam.exam_code }}')">
+                            <i class="fa-solid fa-share-nodes me-1"></i> SHARE CODE
+                        </button>
+                        <a href="{{ url_for('monitoring') }}" class="btn btn-danger px-4 py-2 fw-bold">
+                            <i class="fa-solid fa-shield-halved me-1"></i> MONITOR EXAM
+                        </a>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- Create Exam Form -->
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-navy text-white p-4" style="background: linear-gradient(135deg, #1c2541, #0b132b);">
+                <h4 class="fw-bold mb-1"><i class="fa-solid fa-pen-to-square text-primary me-2"></i> Create New Examination</h4>
+                <p class="small text-light opacity-90 mb-0">Fill exam details and add questions directly. A unique exam code will be generated automatically.</p>
+            </div>
+
+            <div class="card-body p-4">
+                <form method="POST" action="{{ url_for('create_exam') }}">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark">Exam Name</label>
+                            <input type="text" name="title" class="form-control py-2" placeholder="e.g. Python Programming Test" value="Python Programming Test" required>
+                        </div>
+
+                        <!-- Subject Selection with Dynamic "+ Add New Subject" -->
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold text-dark">Select Subject</label>
+                            <div class="input-group">
+                                <select name="subject_id" id="subjectSelectDropdown" class="form-select py-2" required>
+                                    {% for s in subjects %}
+                                        <option value="{{ s.id }}">{{ s.name }} ({{ s.code }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button type="button" class="btn btn-link btn-sm p-0 mt-1 text-primary fw-bold text-decoration-none" data-bs-toggle="modal" data-bs-target="#createSubjectModal">
+                                + Add New Subject
+                            </button>
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold text-dark">Duration (Minutes)</label>
+                            <input type="number" name="duration_minutes" class="form-control py-2" value="60" min="5" max="240" required>
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold text-dark">Total Marks</label>
+                            <input type="number" name="total_marks" class="form-control py-2" value="50" min="1" required>
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold text-dark">Passing Marks</label>
+                            <input type="number" name="passing_marks" class="form-control py-2" value="20" min="1" required>
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold text-dark">Start Date & Time</label>
+                            <input type="datetime-local" name="start_date" class="form-control py-2">
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold text-dark">End Date & Time</label>
+                            <input type="datetime-local" name="end_date" class="form-control py-2">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-bold text-dark">Instructions</label>
+                            <input type="text" name="instructions" class="form-control py-2" value="1. Mandatory camera monitoring active. 2. Screen sharing is optional. 3. Do not switch tabs during examination.">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-bold text-dark">Description</label>
+                            <textarea name="description" class="form-control" rows="2" placeholder="Brief exam description...">Comprehensive online test covering core concepts.</textarea>
+                        </div>
+                    </div>
+
+                    <!-- Direct Question Addition Section -->
+                    <div class="border-top pt-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="fw-bold text-dark mb-0"><i class="fa-solid fa-list-check text-primary me-2"></i> QUESTIONS</h5>
+                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="addQuestionField()">
+                                + ADD QUESTION
+                            </button>
+                        </div>
+
+                        <input type="hidden" id="qCountInput" name="q_count" value="1">
+                        <div id="questionsContainer">
+                            
+                            <!-- Question 1 -->
+                            <div class="p-3 border rounded-3 bg-light mb-3" id="q_card_1">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="fw-bold text-primary">Question 1</span>
+                                    <div>
+                                        <button type="button" class="btn btn-sm btn-link text-secondary text-decoration-none me-2"><i class="fa-solid fa-pen"></i> Edit</button>
+                                        <button type="button" class="btn btn-sm btn-link text-danger text-decoration-none" onclick="document.getElementById('q_card_1').remove()"><i class="fa-solid fa-trash"></i> Delete</button>
+                                    </div>
+                                </div>
+
+                                <div class="row g-2 mb-3">
+                                    <div class="col-md-9">
+                                        <label class="form-label small fw-bold text-muted mb-1">Enter Question</label>
+                                        <input type="text" name="q_1_text" class="form-control" value="What is Python?" required>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small fw-bold text-muted mb-1">Question Type</label>
+                                        <select name="q_1_type" class="form-select">
+                                            <option value="mcq" selected>Multiple Choice</option>
+                                            <option value="true_false">True / False</option>
+                                            <option value="short_answer">Short Answer</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="row g-2 mb-2">
+                                    <div class="col-md-6"><label class="form-label small text-muted mb-0">Option A</label><input type="text" name="q_1_opt_a" class="form-control form-control-sm" value="Programming Language"></div>
+                                    <div class="col-md-6"><label class="form-label small text-muted mb-0">Option B</label><input type="text" name="q_1_opt_b" class="form-control form-control-sm" value="Operating System"></div>
+                                    <div class="col-md-6"><label class="form-label small text-muted mb-0">Option C</label><input type="text" name="q_1_opt_c" class="form-control form-control-sm" value="Database"></div>
+                                    <div class="col-md-6"><label class="form-label small text-muted mb-0">Option D</label><input type="text" name="q_1_opt_d" class="form-control form-control-sm" value="Browser"></div>
+                                </div>
+
+                                <div class="row g-2 align-items-center mt-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-muted mb-1">Correct Answer</label>
+                                        <select name="q_1_ans" class="form-select form-select-sm">
+                                            <option value="A" selected>Option A (Programming Language)</option>
+                                            <option value="B">Option B</option>
+                                            <option value="C">Option C</option>
+                                            <option value="D">Option D</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small fw-bold text-muted mb-1">Marks</label>
+                                        <input type="number" name="q_1_marks" class="form-control form-control-sm" value="1" min="1">
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary-gradient w-100 py-3 fw-bold fs-6 mt-4 shadow-md">
+                        GENERATE EXAM CODE & SAVE EXAM <i class="fa-solid fa-key ms-2"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CREATE NEW SUBJECT MODAL -->
+<div class="modal fade" id="createSubjectModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-navy text-white p-3" style="background: linear-gradient(135deg, #1c2541, #0b132b);">
+                <h5 class="modal-title fw-bold text-white mb-0"><i class="fa-solid fa-plus me-2 text-warning"></i> CREATE NEW SUBJECT</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark">Subject Name:</label>
+                    <input type="text" id="newSubjectName" class="form-control" placeholder="e.g. Artificial Intelligence" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark">Subject Code:</label>
+                    <input type="text" id="newSubjectCode" class="form-control text-uppercase" placeholder="e.g. CS307" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark">Description:</label>
+                    <textarea id="newSubjectDesc" class="form-control" rows="2" placeholder="Brief subject description..."></textarea>
+                </div>
+                <button type="button" id="btnSaveNewSubject" class="btn btn-primary-gradient w-100 py-2 fw-bold">
+                    ADD SUBJECT
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let qCount = 1;
+
+    function addQuestionField() {
+        qCount++;
+        document.getElementById('qCountInput').value = qCount;
+        const container = document.getElementById('questionsContainer');
+
+        const qHTML = `
+            <div class="p-3 border rounded-3 bg-light mb-3" id="q_card_${qCount}">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-bold text-primary">Question ${qCount}</span>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-link text-secondary text-decoration-none me-2"><i class="fa-solid fa-pen"></i> Edit</button>
+                        <button type="button" class="btn btn-sm btn-link text-danger text-decoration-none" onclick="document.getElementById('q_card_${qCount}').remove()"><i class="fa-solid fa-trash"></i> Delete</button>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-9">
+                        <label class="form-label small fw-bold text-muted mb-1">Enter Question</label>
+                        <input type="text" name="q_${qCount}_text" class="form-control" placeholder="Enter question text..." required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted mb-1">Question Type</label>
+                        <select name="q_${qCount}_type" class="form-select">
+                            <option value="mcq" selected>Multiple Choice</option>
+                            <option value="true_false">True / False</option>
+                            <option value="short_answer">Short Answer</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-md-6"><label class="form-label small text-muted mb-0">Option A</label><input type="text" name="q_${qCount}_opt_a" class="form-control form-control-sm" placeholder="Option A"></div>
+                    <div class="col-md-6"><label class="form-label small text-muted mb-0">Option B</label><input type="text" name="q_${qCount}_opt_b" class="form-control form-control-sm" placeholder="Option B"></div>
+                    <div class="col-md-6"><label class="form-label small text-muted mb-0">Option C</label><input type="text" name="q_${qCount}_opt_c" class="form-control form-control-sm" placeholder="Option C"></div>
+                    <div class="col-md-6"><label class="form-label small text-muted mb-0">Option D</label><input type="text" name="q_${qCount}_opt_d" class="form-control form-control-sm" placeholder="Option D"></div>
+                </div>
+
+                <div class="row g-2 align-items-center mt-2">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold text-muted mb-1">Correct Answer</label>
+                        <select name="q_${qCount}_ans" class="form-select form-select-sm">
+                            <option value="A">Option A</option>
+                            <option value="B">Option B</option>
+                            <option value="C">Option C</option>
+                            <option value="D">Option D</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted mb-1">Marks</label>
+                        <input type="number" name="q_${qCount}_marks" class="form-control form-control-sm" value="1" min="1">
+                    </div>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', qHTML);
+    }
+
+    // Dynamic Subject Addition API handler
+    document.getElementById('btnSaveNewSubject')?.addEventListener('click', async () => {
+        const name = document.getElementById('newSubjectName').value.trim();
+        const code = document.getElementById('newSubjectCode').value.trim();
+        const desc = document.getElementById('newSubjectDesc').value.trim();
+
+        if (!name || !code) {
+            alert('Subject Name and Code are required.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/subjects/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, code, description: desc })
+            });
+
+            const res = await response.json();
+            if (res.success) {
+                const select = document.getElementById('subjectSelectDropdown');
+                const newOption = new Option(`${res.subject.name} (${res.subject.code})`, res.subject.id, true, true);
+                select.add(newOption);
+                
+                bootstrap.Modal.getInstance(document.getElementById('createSubjectModal')).hide();
+                if (window.showToast) window.showToast(`Subject "${res.subject.name}" added successfully!`, 'success');
+            } else {
+                alert(res.message || 'Failed to add subject.');
+            }
+        } catch (err) {
+            console.error('Error adding subject:', err);
+        }
+    });
+
+    function copyExamCode(code) {
+        navigator.clipboard.writeText(code).then(() => {
+            if (window.showToast) window.showToast(`Exam code ${code} copied to clipboard!`, 'success');
+        });
+    }
+
+    function shareExamCode(title, code) {
+        const shareMsg = `Join the ${title}.\nExam Code: ${code}\nEnter this code on the student dashboard to start.`;
+        if (navigator.share) {
+            navigator.share({ title: title, text: shareMsg, url: window.location.origin + '/join-exam' }).catch(console.error);
+        } else {
+            navigator.clipboard.writeText(shareMsg).then(() => {
+                if (window.showToast) window.showToast('Exam code shared to clipboard!', 'info');
+            });
+        }
+    }
+</script>
+{% endblock %}

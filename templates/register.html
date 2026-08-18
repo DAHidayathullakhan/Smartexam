@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+
+{% block title %}Register - Smart Online Examination Platform{% endblock %}
+
+{% block content %}
+<section class="py-5" style="min-height: 85vh; background: radial-gradient(circle at 50% 30%, rgba(124, 58, 237, 0.1) 0%, transparent 60%);">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-7 col-lg-6">
+                <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+                    <div class="card-header bg-navy text-white text-center p-4" style="background: linear-gradient(135deg, #1c2541, #0b132b);">
+                        <h4 class="fw-bold mb-1">Create Your Account</h4>
+                        <p class="small text-muted mb-0">Join the secure examination & learning platform</p>
+                    </div>
+
+                    <div class="card-body p-4">
+                        <form method="POST" action="{{ url_for('register') }}">
+                            <!-- Role Selector -->
+                            <div class="mb-4">
+                                <label class="form-label fw-bold text-dark d-block">Select Account Role</label>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <input type="radio" class="btn-check" name="role" id="roleStudent" value="student" checked onchange="toggleRoleFields('student')">
+                                        <label class="btn btn-outline-primary w-100 py-3 rounded-3" for="roleStudent">
+                                            <i class="fa-solid fa-user-graduate fs-4 d-block mb-1"></i>
+                                            <span class="fw-bold">Student Account</span>
+                                        </label>
+                                    </div>
+                                    <div class="col-6">
+                                        <input type="radio" class="btn-check" name="role" id="roleTeacher" value="teacher" onchange="toggleRoleFields('teacher')">
+                                        <label class="btn btn-outline-danger w-100 py-3 rounded-3" for="roleTeacher">
+                                            <i class="fa-solid fa-chalkboard-user fs-4 d-block mb-1"></i>
+                                            <span class="fw-bold">Teacher Account</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-dark">Full Name</label>
+                                <input type="text" name="name" class="form-control py-2" placeholder="e.g. Rahul Sharma" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-dark">Email Address</label>
+                                <input type="email" name="email" class="form-control py-2" placeholder="name@institution.com" required>
+                            </div>
+
+                            <div id="studentRollField" class="mb-3">
+                                <label class="form-label fw-bold text-dark">Roll Number / Student ID</label>
+                                <input type="text" name="roll_number" class="form-control py-2" placeholder="e.g. CS2026-105">
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-dark">Department</label>
+                                <select name="department" class="form-select py-2">
+                                    <option value="Computer Science & Engineering">Computer Science & Engineering</option>
+                                    <option value="Information Technology">Information Technology</option>
+                                    <option value="Electrical Engineering">Electrical Engineering</option>
+                                    <option value="Mechanical Engineering">Mechanical Engineering</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label fw-bold text-dark">Password</label>
+                                <input type="password" name="password" class="form-control py-2" placeholder="Minimum 6 characters" required minlength="6">
+                            </div>
+
+                            <button type="submit" class="btn btn-primary-gradient w-100 py-3 fw-bold fs-6">
+                                REGISTER ACCOUNT <i class="fa-solid fa-user-plus ms-2"></i>
+                            </button>
+                        </form>
+
+                        <div class="text-center mt-4 pt-3 border-top">
+                            <span class="small text-muted">Already registered?</span>
+                            <a href="{{ url_for('login') }}" class="small fw-bold text-primary ms-1">Log In Here</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function toggleRoleFields(role) {
+        const rollField = document.getElementById('studentRollField');
+        rollField.style.display = role === 'student' ? 'block' : 'none';
+    }
+</script>
+{% endblock %}

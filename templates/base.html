@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Smart Online Examination Platform{% endblock %}</title>
+    
+    <meta name="description" content="Production-Grade Secure Online Examination Platform with Unique Exam Codes, Camera Proctoring, Two-Way WebRTC Screen Sharing, and Analytics.">
+    <meta name="theme-color" content="#0b132b">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+
+    <!-- Sticky Glass Navigation Bar -->
+    <nav class="navbar navbar-expand-lg sticky-top navbar-custom">
+        <div class="container">
+            <a class="navbar-brand navbar-brand-logo" href="{{ url_for('index') }}">
+                <div class="brand-icon-wrapper">
+                    <i class="fa-solid fa-graduation-cap"></i>
+                </div>
+                <span>SMART<span class="text-primary">EXAM</span></span>
+            </a>
+
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
+                <i class="fa-solid fa-bars-staggered text-primary fs-3"></i>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarMain">
+                <ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-center gap-1">
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.endpoint == 'index' %}active{% endif %}" href="{{ url_for('index') }}">
+                            <i class="fa-solid fa-house me-1"></i> Home
+                        </a>
+                    </li>
+
+                    {% if current_user and current_user.role == 'student' %}
+                        <li class="nav-item">
+                            <a class="btn btn-primary py-2 px-3 ms-2 fw-bold text-white shadow-sm" href="{{ url_for('join_exam') }}">
+                                <i class="fa-solid fa-key me-1"></i> JOIN EXAM 🔑
+                            </a>
+                        </li>
+                    {% endif %}
+
+                    {% if current_user and current_user.role == 'teacher' %}
+                        <li class="nav-item">
+                            <a class="btn btn-primary py-2 px-3 ms-2 fw-bold text-white shadow-sm" href="{{ url_for('create_exam') }}">
+                                <i class="fa-solid fa-plus me-1"></i> CREATE EXAM 📝
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link nav-link-custom text-danger fw-bold {% if request.endpoint == 'monitoring' %}active{% endif %}" href="{{ url_for('monitoring') }}">
+                                <i class="fa-solid fa-shield-halved me-1"></i> Live Monitor
+                            </a>
+                        </li>
+                    {% endif %}
+
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.endpoint == 'subjects' %}active{% endif %}" href="{{ url_for('subjects') }}">
+                            <i class="fa-solid fa-book-bookmark me-1"></i> Subjects
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.endpoint == 'notes' %}active{% endif %}" href="{{ url_for('notes') }}">
+                            <i class="fa-solid fa-file-lines me-1"></i> Notes
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.endpoint == 'online_classes' %}active{% endif %}" href="{{ url_for('online_classes') }}">
+                            <i class="fa-solid fa-video me-1"></i> Classes
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.endpoint == 'viewboard' %}active{% endif %}" href="{{ url_for('viewboard') }}">
+                            <i class="fa-solid fa-chalkboard-user me-1"></i> ViewBoard
+                        </a>
+                    </li>
+
+                    {% if current_user %}
+                        <li class="nav-item ms-lg-2">
+                            <a class="btn btn-outline-custom py-2 px-3" href="{{ url_for('dashboard') }}">
+                                <i class="fa-solid fa-gauge me-1"></i> Dashboard
+                            </a>
+                        </li>
+
+                        <!-- Notifications Dropdown -->
+                        <li class="nav-item dropdown ms-2">
+                            <a class="nav-link position-relative text-white fs-5" href="#" id="notifDropdown" data-bs-toggle="dropdown">
+                                <i class="fa-regular fa-bell"></i>
+                                {% if unread_notifications %}
+                                    <span class="position-absolute top-0 start-100 translate-middle p-1 bg-danger border border-light rounded-circle"></span>
+                                {% endif %}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 p-3" style="width: 320px; max-height: 400px; overflow-y: auto;">
+                                <h6 class="dropdown-header text-uppercase fw-bold p-0 mb-2">Notifications</h6>
+                                {% if unread_notifications %}
+                                    {% for n in unread_notifications %}
+                                        <li class="mb-2 pb-2 border-bottom">
+                                            <div class="fw-bold small text-dark">{{ n.title }}</div>
+                                            <div class="small text-muted">{{ n.message }}</div>
+                                            <span class="badge bg-light text-secondary mt-1" style="font-size: 0.7rem;">{{ n.created_at.strftime('%H:%M %d %b') }}</span>
+                                        </li>
+                                    {% endfor %}
+                                {% else %}
+                                    <li class="text-muted small text-center py-2">No new notifications</li>
+                                {% endif %}
+                            </ul>
+                        </li>
+
+                        <!-- User Profile Menu -->
+                        <li class="nav-item dropdown ms-2">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center gap-2 text-white font-weight-bold" href="#" id="userMenu" data-bs-toggle="dropdown">
+                                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width: 36px; height: 36px;">
+                                    {{ current_user.name[0] }}
+                                </div>
+                                <span class="d-none d-lg-inline">{{ current_user.name }}</span>
+                            </a>
+
+
+
+                            <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0">
+                                <li><a class="dropdown-item" href="{{ url_for('dashboard') }}"><i class="fa-solid fa-user me-2 text-primary"></i> My Profile</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}"><i class="fa-solid fa-right-from-bracket me-2"></i> Log Out</a></li>
+                            </ul>
+                        </li>
+
+                    {% else %}
+                        <li class="nav-item ms-lg-3">
+                            <a class="btn btn-outline-custom py-2 px-3 me-2" href="{{ url_for('login') }}">Log In</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="btn btn-primary-gradient py-2 px-3" href="{{ url_for('register') }}">Get Started</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Flash Toast Notifications -->
+    <div class="container mt-3">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow-sm" role="alert">
+                        <i class="fa-solid fa-circle-info me-2"></i> {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Main Content Area -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Official Corporate Footer -->
+    <footer class="footer-custom">
+        <div class="container">
+            <div class="row g-4 mb-5">
+                <div class="col-lg-4 col-md-6">
+                    <div class="footer-brand d-flex align-items-center gap-2 mb-3">
+                        <div class="brand-icon-wrapper" style="width: 36px; height: 36px; font-size: 1rem;">
+                            <i class="fa-solid fa-graduation-cap"></i>
+                        </div>
+                        <span>SMART<span class="text-primary">EXAM</span></span>
+                    </div>
+                    <p class="small text-muted mb-4">
+                        Next-generation secure online examination platform with unique exam codes, camera monitoring, two-way WebRTC screen sharing, and performance analytics.
+                    </p>
+                    <div class="d-flex gap-3 text-white fs-5">
+                        <a href="#" class="footer-link"><i class="fa-brands fa-twitter"></i></a>
+                        <a href="#" class="footer-link"><i class="fa-brands fa-linkedin"></i></a>
+                        <a href="#" class="footer-link"><i class="fa-brands fa-github"></i></a>
+                        <a href="#" class="footer-link"><i class="fa-brands fa-youtube"></i></a>
+                    </div>
+                </div>
+
+                <div class="col-lg-2 col-md-6">
+                    <h6 class="text-white fw-bold mb-3">Platform</h6>
+                    <ul class="list-unstyled d-flex flex-column gap-2 small">
+                        <li><a href="{{ url_for('subjects') }}" class="footer-link">Subject Portal</a></li>
+                        <li><a href="{{ url_for('notes') }}" class="footer-link">Unit Notes</a></li>
+                        <li><a href="{{ url_for('exams') }}" class="footer-link">Online Examinations</a></li>
+                        <li><a href="{{ url_for('online_classes') }}" class="footer-link">Live Virtual Classes</a></li>
+                        <li><a href="{{ url_for('viewboard') }}" class="footer-link">Digital ViewBoard</a></li>
+                    </ul>
+                </div>
+
+                <div class="col-lg-3 col-md-6">
+                    <h6 class="text-white fw-bold mb-3">Proctoring & Security</h6>
+                    <ul class="list-unstyled d-flex flex-column gap-2 small">
+                        <li><span class="footer-link"><i class="fa-solid fa-key text-warning me-2"></i> Unique Exam Codes</span></li>
+                        <li><span class="footer-link"><i class="fa-solid fa-shield-check text-success me-2"></i> Mandatory Camera Check</span></li>
+                        <li><span class="footer-link"><i class="fa-solid fa-desktop text-primary me-2"></i> WebRTC Screen Sharing</span></li>
+                        <li><span class="footer-link"><i class="fa-solid fa-window-restore text-warning me-2"></i> Tab-Switch Alerts</span></li>
+                    </ul>
+                </div>
+
+                <div class="col-lg-3 col-md-6">
+                    <h6 class="text-white fw-bold mb-3">Support & Help</h6>
+                    <p class="small text-muted mb-2"><i class="fa-solid fa-location-dot me-2"></i> EdTech Global HQ, Innovation Campus</p>
+                    <p class="small text-muted mb-2"><i class="fa-solid fa-envelope me-2"></i> support@smartexamplatform.com</p>
+                    <p class="small text-muted"><i class="fa-solid fa-phone me-2"></i> +1 (800) 555-EXAM</p>
+                </div>
+            </div>
+
+            <div class="row pt-4 border-top border-secondary align-items-center">
+                <div class="col-md-6 text-center text-md-start small text-muted">
+                    © 2026 Online Examination & Learning Platform. All rights reserved.
+                </div>
+                <div class="col-md-6 text-center text-md-end small text-muted mt-2 mt-md-0">
+                    <a href="#" class="footer-link me-3">Privacy Policy</a>
+                    <a href="#" class="footer-link me-3">Terms of Service</a>
+                    <a href="#" class="footer-link">Security Whitepaper</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom Main JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

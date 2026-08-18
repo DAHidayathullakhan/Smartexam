@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}Live Virtual Classes - Smart Online Examination Platform{% endblock %}
+
+{% block content %}
+<section class="py-4 bg-light">
+    <div class="container">
+        <!-- Header Banner -->
+        <div class="card border-0 shadow-sm rounded-4 p-4 mb-4 text-white" style="background: linear-gradient(135deg, #0b132b 0%, #1c2541 60%, #2563eb 100%);">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <span class="badge bg-danger px-3 py-2 rounded-pill fw-bold mb-2">
+                        <i class="fa-solid fa-video me-1"></i> Interactive Online Classroom
+                    </span>
+                    <h2 class="fw-800 text-white mb-1">Live Virtual Classrooms</h2>
+                    <p class="text-light opacity-90 m-0">Join interactive video sessions with real-time audio, screen sharing, live chat, and hand raising.</p>
+                </div>
+                {% if current_user and current_user.role == 'teacher' %}
+                    <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                        <button type="button" class="btn btn-warning font-weight-bold text-dark px-4 py-2" data-bs-toggle="modal" data-bs-target="#createClassModal">
+                            + SCHEDULE LIVE CLASS 📹
+                        </button>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Scheduled & Active Classes Grid -->
+        <div class="row g-4 mb-4">
+            {% if classes %}
+                {% for c in classes %}
+                    <div class="col-lg-4 col-md-6">
+                        <div class="card border-0 shadow-sm rounded-4 h-100 bg-white">
+                            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                                <span class="badge bg-primary-subtle text-primary fw-bold">{{ c.subject.code }}</span>
+                                {% if c.status == 'live' %}
+                                    <span class="badge bg-danger">🟢 LIVE NOW</span>
+                                {% else %}
+                                    <span class="badge bg-info text-dark">SCHEDULED</span>
+                                {% endif %}
+                            </div>
+
+                            <div class="card-body p-4">
+                                <h5 class="fw-bold text-dark mb-2">{{ c.title }}</h5>
+                                <p class="small text-muted mb-3"><i class="fa-solid fa-user-tie text-primary me-1"></i> Teacher: {{ c.teacher.name }}</p>
+
+                                <div class="p-3 bg-light rounded-3 mb-3 border small">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">Subject:</span>
+                                        <strong class="text-dark">{{ c.subject.name }}</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">Scheduled Time:</span>
+                                        <strong class="text-dark">{{ c.scheduled_at.strftime('%b %d, %I:%M %p') }}</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span class="text-muted">Duration:</span>
+                                        <strong class="text-dark">{{ c.duration_minutes }} Mins</strong>
+                                    </div>
+                                </div>
+
+                                <a href="{{ url_for('live_classroom', class_id=c.id) }}" class="btn btn-primary-gradient w-100 py-2 fw-bold">
+                                    JOIN LIVE CLASSROOM ▶
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-12 text-center py-5 text-muted">
+                    <i class="fa-solid fa-video-slash fa-3x mb-3 text-secondary"></i>
+                    <h5>No virtual classes scheduled right now.</h5>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<!-- SCHEDULE LIVE CLASS MODAL FOR TEACHER -->
+{% if current_user and current_user.role == 'teacher' %}
+<div class="modal fade" id="createClassModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-navy text-white p-3" style="background: linear-gradient(135deg, #1c2541, #0b132b);">
+                <h5 class="modal-title fw-bold text-white mb-0"><i class="fa-solid fa-video me-2 text-warning"></i> SCHEDULE LIVE CLASSROOM</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form method="POST" action="{{ url_for('create_online_class') }}">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-dark">Class Name / Title:</label>
+                        <input type="text" name="title" class="form-control" placeholder="e.g. Python Programming Live Lecture" value="Python Programming Live Lecture" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-dark">Select Subject:</label>
+                        <select name="subject_id" class="form-select" required>
+                            {% for s in subjects %}
+                                <option value="{{ s.id }}">{{ s.name }} ({{ s.code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-bold text-dark">Date & Time:</label>
+                            <input type="datetime-local" name="scheduled_at" class="form-control" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-bold text-dark">Duration (Mins):</label>
+                            <input type="number" name="duration_minutes" class="form-control" value="60" min="15" max="180">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary-gradient w-100 py-2 fw-bold">
+                        LAUNCH LIVE CLASSROOM NOW 🚀
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

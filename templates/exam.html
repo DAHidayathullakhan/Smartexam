@@ -1,0 +1,484 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ exam.title }} - Distraction-Free Proctored Exam{% endblock %}
+
+{% block head %}
+<style>
+    /* Distraction-Free Proctoring Mode Custom Styles */
+    .exam-topbar {
+        background: #0b132b;
+        color: #fff;
+        border-bottom: 2px solid #1c2541;
+        padding: 0.75rem 1.5rem;
+    }
+    .question-palette-btn {
+        width: 38px;
+        height: 38px;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: None;
+    }
+    .q-status-answered { background-color: #10b981 !important; color: white !important; }
+    .q-status-unanswered { background-color: #9ca3af !important; color: white !important; }
+    .q-status-review { background-color: #f59e0b !important; color: white !important; }
+    .q-status-current { background-color: #2563eb !important; color: white !important; ring: 3px solid #60a5fa; }
+    
+    .camera-live-pip {
+        width: 140px;
+        height: 90px;
+        background: #000;
+        border-radius: 8px;
+        overflow: hidden;
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1050;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        border: 2px solid #2563eb;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Floating Mini Camera Stream PIP -->
+<div class="camera-live-pip">
+    <video id="examLiveCameraFeed" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
+</div>
+
+<!-- Distraction-Free Top Bar -->
+<div class="exam-topbar sticky-top shadow-sm">
+    <div class="container-fluid d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+            <h5 class="fw-800 text-white mb-0">{{ exam.title }}</h5>
+            <small class="text-warning fw-bold font-monospace">Code: {{ exam.exam_code }}</small>
+        </div>
+
+        <div class="d-flex align-items-center gap-3">
+            <!-- Mandatory Camera Status -->
+            <span id="examTopCameraBadge" class="badge bg-success px-3 py-2 fs-6">
+                <i class="fa-solid fa-camera me-1"></i> 🟢 Camera Active
+            </span>
+
+            <!-- Optional Screen Status -->
+            <span id="examTopScreenBadge" class="badge bg-secondary px-3 py-2 fs-6">
+                <i class="fa-solid fa-desktop me-1"></i> ⚪ Screen Sharing Off
+            </span>
+
+            <!-- Timer Countdown Display -->
+            <div class="bg-dark text-warning border border-warning px-3 py-1 rounded-3 fw-bold fs-5 font-monospace">
+                ⏱ <span id="timerDisplay">42:35</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="py-4 bg-light" style="min-height: 85vh;">
+    <div class="container">
+        <div class="row g-4">
+            
+            <!-- Left Column: Single Question Viewer -->
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                        <h6 class="fw-bold text-primary mb-0" id="qHeaderCount">Question 1 of {{ questions|length }}</h6>
+                        <span class="badge bg-primary-subtle text-primary fw-bold" id="qMarksText">1 Mark</span>
+                    </div>
+
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold text-dark mb-4" id="qTextDisplay">What is Python?</h5>
+
+                        <!-- MCQ Options -->
+                        <div class="d-flex flex-column gap-3 mb-4" id="optionsContainer">
+                            <div class="form-check p-3 border rounded-3 bg-white option-box">
+                                <input class="form-check-input ms-1 me-3" type="radio" name="optRadio" id="opt_a" value="A">
+                                <label class="form-check-label fw-500 text-dark" for="opt_a" id="lbl_a">Programming Language</label>
+                            </div>
+                            <div class="form-check p-3 border rounded-3 bg-white option-box">
+                                <input class="form-check-input ms-1 me-3" type="radio" name="optRadio" id="opt_b" value="B">
+                                <label class="form-check-label fw-500 text-dark" for="opt_b" id="lbl_b">Operating System</label>
+                            </div>
+                            <div class="form-check p-3 border rounded-3 bg-white option-box">
+                                <input class="form-check-input ms-1 me-3" type="radio" name="optRadio" id="opt_c" value="C">
+                                <label class="form-check-label fw-500 text-dark" for="opt_c" id="lbl_c">Database</label>
+                            </div>
+                            <div class="form-check p-3 border rounded-3 bg-white option-box">
+                                <input class="form-check-input ms-1 me-3" type="radio" name="optRadio" id="opt_d" value="D">
+                                <label class="form-check-label fw-500 text-dark" for="opt_d" id="lbl_d">Web Browser</label>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex flex-wrap justify-content-between gap-2 border-top pt-4">
+                            <button type="button" id="btnPrevQ" class="btn btn-outline-secondary px-4 fw-bold" disabled>
+                                ← Previous
+                            </button>
+
+                            <button type="button" id="btnMarkReview" class="btn btn-warning text-dark px-4 fw-bold">
+                                Mark for Review
+                            </button>
+
+                            <button type="button" id="btnNextQ" class="btn btn-primary-gradient px-4 fw-bold">
+                                Next →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Question Palette & Submit Exam -->
+            <div class="col-lg-4">
+                <!-- Question Palette Navigation Card -->
+                <div class="card border-0 shadow-sm rounded-4 mb-4">
+                    <div class="card-header bg-white py-3 border-0">
+                        <h6 class="fw-bold text-dark mb-0"><i class="fa-solid fa-grid-2 text-primary me-2"></i> Question Palette</h6>
+                    </div>
+                    <div class="card-body p-3">
+                        <div class="d-flex flex-wrap gap-2 mb-3" id="questionPaletteContainer">
+                            {% for q in questions %}
+                                <button type="button" class="question-palette-btn q-status-unanswered" id="q_btn_{{ loop.index }}" onclick="jumpToQuestion({{ loop.index0 }})">
+                                    {{ loop.index }}
+                                </button>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Palette Color Legend -->
+                        <div class="border-top pt-3">
+                            <small class="fw-bold text-muted text-uppercase d-block mb-2">Palette Legend:</small>
+                            <div class="d-flex flex-wrap gap-2 small">
+                                <div><span class="badge bg-success me-1">Green</span> Answered</div>
+                                <div><span class="badge bg-secondary me-1">Gray</span> Not Answered</div>
+                                <div><span class="badge bg-warning text-dark me-1">Yellow</span> Review</div>
+                                <div><span class="badge bg-primary me-1">Blue</span> Current</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Exam Card -->
+                <div class="card border-0 shadow-sm rounded-4 bg-navy text-white" style="background: linear-gradient(135deg, #1c2541, #0b132b);">
+                    <div class="card-body p-4 text-center">
+                        <h5 class="fw-bold mb-2">Finished Examination?</h5>
+                        <p class="small text-light opacity-75 mb-3">Ensure all questions are answered before submitting.</p>
+
+                        <button type="button" id="btnSubmitExam" class="btn btn-success w-100 py-3 fw-bold fs-5 shadow-lg">
+                            # SUBMIT EXAM
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+<!-- TEACHER WARNING MODAL -->
+<div class="modal fade" id="teacherWarningModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 text-center p-4">
+            <div class="text-warning display-3 mb-2"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <h4 class="fw-bold text-dark mb-2">⚠️ TEACHER WARNING</h4>
+            <div class="p-3 bg-light rounded-3 border mb-3">
+                <p class="fs-6 fw-bold text-dark mb-0" id="teacherWarningMessageText">Please return to the examination window.</p>
+                <small class="text-muted mt-1 d-block" id="teacherWarningSenderInfo">Sent by your Exam Proctor</small>
+            </div>
+            <button type="button" id="btnAckWarning" class="btn btn-warning text-dark fw-bold w-100 py-2 fs-6">
+                OK
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Tab Switch Warning Modal -->
+<div class="modal fade" id="tabSwitchModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 text-center p-4">
+            <div class="text-warning display-4 mb-2"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <h4 class="fw-bold text-dark mb-1">⚠️ WARNING</h4>
+            <p class="text-muted small mb-3">You have switched away from the examination window. This event has been recorded.</p>
+            <div class="alert alert-warning py-2 mb-3">
+                Tab Switch Count: <strong id="modalTabSwitchCount">1</strong>
+            </div>
+            <button type="button" class="btn btn-warning fw-bold text-dark w-100 py-2" data-bs-dismiss="modal">
+                RETURN TO EXAMINATION
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Camera Disconnected Modal -->
+<div class="modal fade" id="cameraErrorModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 text-center p-4">
+            <div class="text-danger display-4 mb-2"><i class="fa-solid fa-video-slash"></i></div>
+            <h4 class="fw-bold text-danger mb-1">🔴 Camera Disconnected</h4>
+            <p class="text-muted small mb-3">Your camera connection has been interrupted. Please reconnect your camera to continue.</p>
+            <button type="button" class="btn btn-danger fw-bold w-100 py-2" onclick="reconnectCamera()">
+                RECONNECT CAMERA 📹
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const examData = {
+        attemptId: {{ attempt.id }},
+        examId: {{ exam.id }},
+        durationMinutes: {{ exam.duration_minutes }},
+        questions: [
+            {% for q in questions %}
+                {
+                    id: {{ q.id }},
+                    text: {{ q.question_text|tojson }},
+                    optA: {{ q.option_a|tojson }},
+                    optB: {{ q.option_b|tojson }},
+                    optC: {{ q.option_c|tojson }},
+                    optD: {{ q.option_d|tojson }},
+                    marks: {{ q.marks }}
+                }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ]
+    };
+
+    let currentIndex = 0;
+    const userAnswers = {};
+    const reviewStatus = {};
+    let tabSwitchCount = 0;
+    let timerInterval = null;
+    let cameraStream = null;
+    let activeWarningId = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initCameraStream();
+        initTimer(examData.durationMinutes * 60);
+        renderCurrentQuestion();
+        setupEventListeners();
+        setupTabSwitchDetection();
+        startTeacherWarningPolling();
+    });
+
+    // 1. Mandatory Camera Stream Preview
+    async function initCameraStream() {
+        try {
+            cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            document.getElementById('examLiveCameraFeed').srcObject = cameraStream;
+
+            cameraStream.getVideoTracks()[0].onended = () => {
+                handleCameraDisconnect();
+            };
+        } catch (err) {
+            console.error('Camera lost:', err);
+            handleCameraDisconnect();
+        }
+    }
+
+    function handleCameraDisconnect() {
+        document.getElementById('examTopCameraBadge').className = 'badge bg-danger px-3 py-2 fs-6';
+        document.getElementById('examTopCameraBadge').innerHTML = '<i class="fa-solid fa-video-slash me-1"></i> 🔴 Camera Disconnected';
+        const modal = new bootstrap.Modal(document.getElementById('cameraErrorModal'));
+        modal.show();
+
+        fetch('/api/monitoring/event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ attempt_id: examData.attemptId, event_type: 'camera_disconnected', details: 'Camera stream disconnected' })
+        });
+    }
+
+    window.reconnectCamera = async function() {
+        try {
+            cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            document.getElementById('examLiveCameraFeed').srcObject = cameraStream;
+            document.getElementById('examTopCameraBadge').className = 'badge bg-success px-3 py-2 fs-6';
+            document.getElementById('examTopCameraBadge').innerHTML = '<i class="fa-solid fa-camera me-1"></i> 🟢 Camera Active';
+            bootstrap.Modal.getInstance(document.getElementById('cameraErrorModal')).hide();
+        } catch (err) {
+            alert('Camera re-connection failed. Please check your camera device.');
+        }
+    };
+
+    // 2. Real-time Teacher Warning Polling
+    function startTeacherWarningPolling() {
+        setInterval(async () => {
+            try {
+                const response = await fetch('/api/exam/student-warnings');
+                const data = await response.json();
+                if (data.warnings && data.warnings.length > 0) {
+                    const w = data.warnings[0];
+                    activeWarningId = w.id;
+                    document.getElementById('teacherWarningMessageText').innerText = `"${w.message}"`;
+                    document.getElementById('teacherWarningSenderInfo').innerText = `Sent by Teacher: ${w.teacher_name} at ${w.timestamp}`;
+                    
+                    const modal = new bootstrap.Modal(document.getElementById('teacherWarningModal'));
+                    modal.show();
+                }
+            } catch (err) {
+                console.error('Warning polling error:', err);
+            }
+        }, 3000);
+
+        document.getElementById('btnAckWarning')?.addEventListener('click', async () => {
+            if (activeWarningId) {
+                await fetch('/api/exam/acknowledge-warning', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ warning_id: activeWarningId })
+                });
+            }
+            bootstrap.Modal.getInstance(document.getElementById('teacherWarningModal')).hide();
+        });
+    }
+
+    // 3. Timer Countdown Engine
+    function initTimer(totalSeconds) {
+        let secondsLeft = totalSeconds;
+        const timerDisplay = document.getElementById('timerDisplay');
+
+        timerInterval = setInterval(() => {
+            secondsLeft--;
+            if (secondsLeft <= 0) {
+                clearInterval(timerInterval);
+                alert("Time is over. Your exam has been submitted automatically.");
+                submitExamAnswers();
+                return;
+            }
+
+            const mins = Math.floor(secondsLeft / 60);
+            const secs = secondsLeft % 60;
+            timerDisplay.innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }, 1000);
+    }
+
+    // 4. Question Navigation & Display
+    function renderCurrentQuestion() {
+        const q = examData.questions[currentIndex];
+        document.getElementById('qHeaderCount').innerText = `Question ${currentIndex + 1} of ${examData.questions.length}`;
+        document.getElementById('qMarksText').innerText = `${q.marks} Mark${q.marks > 1 ? 's' : ''}`;
+        document.getElementById('qTextDisplay').innerText = q.text;
+
+        document.getElementById('lbl_a').innerText = q.optA;
+        document.getElementById('lbl_b').innerText = q.optB;
+        document.getElementById('lbl_c').innerText = q.optC;
+        document.getElementById('lbl_d').innerText = q.optD;
+
+        const selected = userAnswers[q.id];
+        document.querySelectorAll('input[name="optRadio"]').forEach(r => {
+            r.checked = (r.value === selected);
+        });
+
+        document.getElementById('btnPrevQ').disabled = (currentIndex === 0);
+        document.getElementById('btnNextQ').innerText = (currentIndex === examData.questions.length - 1) ? 'Finish & Review →' : 'Next →';
+
+        updatePaletteColors();
+    }
+
+    function setupEventListeners() {
+        document.querySelectorAll('input[name="optRadio"]').forEach(r => {
+            r.addEventListener('change', (e) => {
+                const qId = examData.questions[currentIndex].id;
+                userAnswers[qId] = e.target.value;
+                updatePaletteColors();
+            });
+        });
+
+        document.getElementById('btnNextQ').addEventListener('click', () => {
+            if (currentIndex < examData.questions.length - 1) {
+                currentIndex++;
+                renderCurrentQuestion();
+            }
+        });
+
+        document.getElementById('btnPrevQ').addEventListener('click', () => {
+            if (currentIndex > 0) {
+                currentIndex--;
+                renderCurrentQuestion();
+            }
+        });
+
+        document.getElementById('btnMarkReview').addEventListener('click', () => {
+            const qId = examData.questions[currentIndex].id;
+            reviewStatus[qId] = !reviewStatus[qId];
+            updatePaletteColors();
+        });
+
+        document.getElementById('btnSubmitExam').addEventListener('click', () => {
+            if (confirm("Are you sure you want to submit your examination?")) {
+                submitExamAnswers();
+            }
+        });
+    }
+
+    window.jumpToQuestion = function(idx) {
+        currentIndex = idx;
+        renderCurrentQuestion();
+    };
+
+    function updatePaletteColors() {
+        examData.questions.forEach((q, idx) => {
+            const btn = document.getElementById(`q_btn_${idx + 1}`);
+            if (!btn) return;
+
+            btn.className = 'question-palette-btn ';
+
+            if (idx === currentIndex) {
+                btn.classList.add('q-status-current');
+            } else if (reviewStatus[q.id]) {
+                btn.classList.add('q-status-review');
+            } else if (userAnswers[q.id]) {
+                btn.classList.add('q-status-answered');
+            } else {
+                btn.classList.add('q-status-unanswered');
+            }
+        });
+    }
+
+    // 5. Tab Switch Detection
+    function setupTabSwitchDetection() {
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                tabSwitchCount++;
+                document.getElementById('modalTabSwitchCount').innerText = tabSwitchCount;
+                const modal = new bootstrap.Modal(document.getElementById('tabSwitchModal'));
+                modal.show();
+
+                fetch('/api/monitoring/event', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        attempt_id: examData.attemptId,
+                        event_type: 'tab_switch',
+                        details: `Student switched tabs. Total count: ${tabSwitchCount}`
+                    })
+                });
+            }
+        });
+    }
+
+    // 6. Submit Answers
+    async function submitExamAnswers() {
+        clearInterval(timerInterval);
+        try {
+            const response = await fetch(`/api/exam/submit/${examData.attemptId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ answers: userAnswers })
+            });
+
+            const res = await response.json();
+            if (res.success) {
+                window.location.href = res.redirect_url;
+            }
+        } catch (err) {
+            console.error('Submit error:', err);
+            alert('Error submitting exam. Please check connection.');
+        }
+    }
+</script>
+{% endblock %}

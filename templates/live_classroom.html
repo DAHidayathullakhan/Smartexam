@@ -1,0 +1,882 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ classroom.title }} - Google Meet Live Classroom{% endblock %}
+
+{% block head %}
+<style>
+    .classroom-container {
+        background-color: #0b132b;
+        min-height: 88vh;
+        color: white;
+    }
+    .video-stage {
+        background-color: #1c2541;
+        border-radius: 16px;
+        min-height: 340px;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .participant-grid-card {
+        background: rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(12px);
+        border: 2px solid rgba(255, 255, 255, 0.15);
+        border-radius: 14px;
+        overflow: hidden;
+        position: relative;
+        min-height: 210px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .participant-grid-card.speaking {
+        border-color: #10b981 !important;
+        box-shadow: 0 0 18px rgba(16, 185, 129, 0.6) !important;
+    }
+    .participant-avatar-placeholder {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        color: white;
+        font-weight: 800;
+        font-size: 1.4rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0.5rem auto;
+    }
+    .chat-sidebar {
+        background: #1c2541;
+        border-radius: 16px;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    .chat-messages-box {
+        flex-grow: 1;
+        overflow-y: auto;
+        max-height: 360px;
+    }
+    .live-video-elem {
+        width: 100%;
+        height: 145px;
+        object-fit: cover;
+        border-radius: 10px;
+    }
+    .stat-mini-pill {
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        padding: 0.4rem 0.6rem;
+        text-align: center;
+    }
+    .webrtc-debug-panel {
+        background: rgba(0, 0, 0, 0.85);
+        border: 1px solid #10b981;
+        border-radius: 12px;
+        font-family: monospace;
+        font-size: 0.75rem;
+        color: #10b981;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="classroom-container d-flex flex-column">
+    <!-- Top Classroom Header -->
+    <div class="px-3 py-3 border-bottom border-secondary d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div class="d-flex align-items-center gap-3">
+            <span class="badge bg-danger fs-6 px-3 py-2 animate-pulse">🟢 LIVE CLASS</span>
+            <div>
+                <h4 class="fw-800 text-white mb-0">{{ classroom.title }}</h4>
+                <small class="text-light opacity-75">Instructor: {{ classroom.teacher.name }} | Subject: {{ classroom.subject.name }}</small>
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-primary px-3 py-2 fs-6">
+                <i class="fa-solid fa-users me-1"></i> Students: <strong id="headerStudentCount">{{ participants|length }}</strong>
+            </span>
+            <button class="btn btn-sm btn-outline-success font-monospace" type="button" data-bs-toggle="collapse" data-bs-target="#webrtcDebugCollapse">
+                🛠️ WebRTC Debug
+            </button>
+        </div>
+    </div>
+
+    <!-- DEVELOPMENT WEBRTC DEBUG PANEL -->
+    <div class="collapse px-3 pt-2" id="webrtcDebugCollapse">
+        <div class="webrtc-debug-panel p-3 shadow-lg">
+            <h6 class="fw-bold text-success mb-2"><i class="fa-solid fa-bug me-1"></i> WEBRTC REAL-TIME DIAGNOSTIC PANEL</h6>
+            <div class="row g-2">
+                <div class="col-md-3 col-6">HTTPS Protocol: <strong id="dbgHttps" class="text-white">CHECKING...</strong></div>
+                <div class="col-md-3 col-6">Secure Context: <strong id="dbgSecureContext" class="text-white">CHECKING...</strong></div>
+                <div class="col-md-3 col-6">Camera Permission: <strong id="dbgCamPerm" class="text-white">NOT REQUESTED</strong></div>
+                <div class="col-md-3 col-6">Microphone Permission: <strong id="dbgMicPerm" class="text-white">NOT REQUESTED</strong></div>
+                <div class="col-md-3 col-6">Local Video Tracks: <strong id="dbgLocalVideoTracks" class="text-white">0</strong></div>
+                <div class="col-md-3 col-6">Local Audio Tracks: <strong id="dbgLocalAudioTracks" class="text-white">0</strong></div>
+                <div class="col-md-3 col-6">Peer Connection State: <strong id="dbgPeerState" class="text-warning">NEW</strong></div>
+                <div class="col-md-3 col-6">ICE Connection State: <strong id="dbgIceState" class="text-warning">NEW</strong></div>
+                <div class="col-md-3 col-6">Remote Video Tracks: <strong id="dbgRemoteVideoTracks" class="text-white">0</strong></div>
+                <div class="col-md-3 col-6">Remote Audio Tracks: <strong id="dbgRemoteAudioTracks" class="text-white">0</strong></div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Mobile Browser Insecure Context Warning Banner -->
+    <div id="mobileHttpsNoticeBanner" class="alert alert-warning border-0 rounded-0 m-0 py-2 px-4 d-flex align-items-center justify-content-between" style="display: none !important;">
+        <div class="d-flex align-items-center gap-2 small">
+            <i class="fa-solid fa-triangle-exclamation text-dark fs-5"></i>
+            <div>
+                <strong>Mobile Browser Security Notice:</strong> Camera and microphone require a secure HTTPS connection on mobile devices/browsers. Please use an HTTPS deployment for full mobile Live Class camera functionality.
+            </div>
+        </div>
+        <button type="button" class="btn-close text-dark small" onclick="document.getElementById('mobileHttpsNoticeBanner').style.display='none'"></button>
+    </div>
+
+    <!-- Main Live Area: Video Grid & Teacher Right Monitoring Panel -->
+    <div class="container-fluid flex-grow-1 py-3 px-3">
+        <div class="row g-3 h-100">
+            
+            <!-- Main Video Stage & Participant Grid -->
+            <div class="col-lg-8 d-flex flex-column gap-3">
+                <!-- Primary Stage (Shared Screen / Instructor Video) -->
+                <div class="video-stage shadow-lg" id="primaryVideoStage">
+                    <video id="classMainStageVideo" autoplay playsinline style="width: 100%; height: 100%; object-fit: contain; display: none;"></video>
+                    
+                    <div id="classStagePlaceholder" class="text-center p-4">
+                        <div class="participant-avatar-placeholder mb-3" style="width: 80px; height: 80px; font-size: 2rem;">
+                            {{ classroom.teacher.name[0] }}
+                        </div>
+                        <h4 class="fw-bold text-white mb-1">{{ classroom.teacher.name }}</h4>
+                        <p class="text-light opacity-75 mb-2">Live Virtual Class Session Active</p>
+                        <span class="badge bg-success px-3 py-2 fs-6"><i class="fa-solid fa-chalkboard-user me-1"></i> Instructor Broadcasting</span>
+                    </div>
+                </div>
+
+                <!-- Google Meet-Style Multi-Participant Grid -->
+                <div class="row g-3" id="classParticipantGrid">
+                    <!-- Teacher Card -->
+                    <div class="col-md-4 col-6">
+                        <div class="participant-grid-card p-2 text-center" id="card_user_{{ classroom.teacher_id }}">
+                            <span id="badge_speaking_{{ classroom.teacher_id }}" class="badge bg-success position-absolute top-0 start-0 m-2" style="display: none; z-index: 10;">🟢 Speaking</span>
+
+                            <video id="video_user_{{ classroom.teacher_id }}" autoplay playsinline class="live-video-elem" style="display: none;"></video>
+
+                            <div id="avatar_user_{{ classroom.teacher_id }}" class="participant-avatar-placeholder">
+                                {{ classroom.teacher.name[:2]|upper }}
+                            </div>
+                            
+                            <div class="px-2 mt-1">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="fw-bold text-warning small text-truncate">{{ classroom.teacher.name }}</span>
+                                    <span class="badge bg-danger" style="font-size: 0.65rem;">HOST</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center" style="font-size: 0.65rem;">
+                                    <span class="text-success fw-bold">🟢 Active</span>
+                                    <span class="text-muted">Instructor</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Student Participant Cards -->
+                    {% for p in participants %}
+                        <div class="col-md-4 col-6">
+                            <div class="participant-grid-card p-2 text-center" id="card_user_{{ p.student_id }}">
+                                <!-- Speaking Badge -->
+                                <span id="badge_speaking_{{ p.student_id }}" class="badge bg-success position-absolute top-0 start-0 m-2" style="display: none; z-index: 10;">🟢 SPEAKING</span>
+
+                                {% if p.hand_raised %}
+                                    <span class="badge bg-warning text-dark position-absolute top-0 end-0 m-2" style="z-index: 10;">✋ Hand Raised</span>
+                                {% endif %}
+
+                                <!-- Actual WebRTC Live Audio & Video Container -->
+                                <video id="video_user_{{ p.student_id }}" autoplay playsinline class="live-video-elem" style="display: none;"></video>
+
+                                <!-- Avatar Placeholder when camera is off -->
+                                <div id="avatar_user_{{ p.student_id }}" class="participant-avatar-placeholder">
+                                    {{ p.student.name[:2]|upper }}
+                                </div>
+
+                                <div class="px-2 mt-1">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="fw-bold text-white small text-truncate">{{ p.student.name }}</span>
+                                        <span class="badge bg-success" style="font-size: 0.6rem;">🟢 ACTIVE</span>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between align-items-center mb-1" style="font-size: 0.65rem;">
+                                        <span id="badge_cam_{{ p.student_id }}" class="badge {% if p.camera_status == 'on' %}bg-success{% else %}bg-secondary{% endif %}">
+                                            {% if p.camera_status == 'on' %}📹 Cam ON{% else %}📷 Cam OFF{% endif %}
+                                        </span>
+                                        <span id="badge_mic_{{ p.student_id }}" class="badge {% if p.microphone_status == 'on' %}bg-success{% else %}bg-danger{% endif %}">
+                                            {% if p.microphone_status == 'on' %}🎤 MIC ON{% else %}🔴 MIC OFF{% endif %}
+                                        </span>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between align-items-center opacity-75 mb-2" style="font-size: 0.6rem;">
+                                        <span class="text-light">Last Activity:</span>
+                                        <span class="font-monospace text-info">{{ p.last_activity.strftime('%I:%M %p') if p.last_activity else 'Just now' }}</span>
+                                    </div>
+
+                                    <!-- Teacher Action Controls for Student -->
+                                    {% if current_user.role == 'teacher' and p.student_id != current_user.id %}
+                                        <div class="d-flex gap-1 border-top border-secondary pt-1">
+                                            <button type="button" class="btn btn-sm btn-warning text-dark flex-grow-1 p-0 py-1 fw-bold" onclick="askStudentToAnswer({{ p.student_id }})" style="font-size: 0.6rem;">
+                                                ASK TO ANSWER
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger p-0 px-1 fw-bold" onclick="teacherMuteStudent({{ p.student_id }})" style="font-size: 0.6rem;">
+                                                MUTE
+                                            </button>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Right Sidebar: Teacher Monitoring Panel & Live Chat -->
+            <div class="col-lg-4">
+                <div class="chat-sidebar p-3 shadow-lg">
+                    
+                    <!-- Teacher Live Monitoring Metrics Grid -->
+                    <div class="mb-3 p-3 bg-dark bg-opacity-50 rounded-3 border border-secondary">
+                        <h6 class="fw-bold text-warning mb-2 border-bottom border-secondary pb-1">
+                            <i class="fa-solid fa-chart-pie me-1"></i> LIVE MONITORING METRICS
+                        </h6>
+                        <div class="row g-2 text-center">
+                            <div class="col-4">
+                                <div class="stat-mini-pill">
+                                    <small class="text-muted d-block" style="font-size: 0.65rem;">STUDENTS</small>
+                                    <strong class="text-white fs-6" id="metricTotalStudents">{{ participants|length }}</strong>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="stat-mini-pill">
+                                    <small class="text-muted d-block" style="font-size: 0.65rem;">CAMERA ON</small>
+                                    <strong class="text-success fs-6" id="metricCameraOn">0</strong>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="stat-mini-pill">
+                                    <small class="text-muted d-block" style="font-size: 0.65rem;">MIC ON</small>
+                                    <strong class="text-info fs-6" id="metricMicOn">0</strong>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="stat-mini-pill">
+                                    <small class="text-muted d-block" style="font-size: 0.65rem;">SPEAKING</small>
+                                    <strong class="text-warning fs-6" id="metricSpeaking">0</strong>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="stat-mini-pill">
+                                    <small class="text-muted d-block" style="font-size: 0.65rem;">HANDS RAISED</small>
+                                    <strong class="text-warning fs-6" id="metricRaisedHands">0</strong>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="stat-mini-pill">
+                                    <small class="text-muted d-block" style="font-size: 0.65rem;">SCREEN SHARE</small>
+                                    <strong class="text-primary fs-6" id="metricScreenShare">0</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sidebar Tabs -->
+                    <ul class="nav nav-pills nav-justified bg-dark rounded-3 p-1 mb-3">
+                        <li class="nav-item">
+                            <button class="nav-link active text-white fw-bold py-2" id="tabChatBtn" onclick="switchSidebarTab('chat')">
+                                💬 CLASS CHAT
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link text-white fw-bold py-2" id="tabPeopleBtn" onclick="switchSidebarTab('people')">
+                                👥 PARTICIPANTS (<span id="tabPeopleCount">{{ participants|length }}</span>)
+                            </button>
+                        </li>
+                    </ul>
+
+                    <!-- TAB 1: Live Class Chat -->
+                    <div id="tabChatContent" class="d-flex flex-column flex-grow-1" style="height: 380px;">
+                        <div class="chat-messages-box p-2 mb-3" id="classChatBox">
+                            {% for m in messages %}
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="fw-bold text-info small">{{ m.sender.name }}</span>
+                                        <small class="text-muted" style="font-size: 0.7rem;">{{ m.timestamp.strftime('%I:%M %p') }}</small>
+                                    </div>
+                                    <div class="p-2 rounded-3 bg-dark text-light small border border-secondary">
+                                        {{ m.message }}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="input-group">
+                            <input type="text" id="classChatInput" class="form-control bg-dark text-white border-secondary" placeholder="Type your message...">
+                            <button type="button" id="btnSendClassChat" class="btn btn-primary fw-bold">
+                                SEND
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: Raised Hands Queue & Participant List -->
+                    <div id="tabPeopleContent" class="flex-grow-1" style="display: none; height: 380px; overflow-y: auto;">
+                        <div class="mb-4">
+                            <h6 class="fw-bold text-warning border-bottom border-secondary pb-2 mb-2">
+                                ✋ RAISED HANDS QUEUE (<span id="raisedHandCount">0</span>)
+                            </h6>
+                            <div id="raisedHandsList" class="d-flex flex-column gap-2">
+                                <div class="text-muted small">No raised hands right now.</div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h6 class="fw-bold text-light border-bottom border-secondary pb-2 mb-2">
+                                # LIVE PARTICIPANTS DIRECTORY
+                            </h6>
+                            <div id="allParticipantsList" class="d-flex flex-column gap-2">
+                                {% for p in participants %}
+                                    <div class="p-2 bg-dark rounded-3 d-flex justify-content-between align-items-center border border-secondary">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold small" style="width: 28px; height: 28px;">
+                                                {{ p.student.name[0] }}
+                                            </div>
+                                            <div>
+                                                <span class="small fw-bold text-light d-block">{{ p.student.name }}</span>
+                                                <small class="text-muted" style="font-size: 0.65rem;">Last Act: {{ p.last_activity.strftime('%I:%M %p') if p.last_activity else 'Now' }}</small>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex gap-1 align-items-center">
+                                            <span class="badge {% if p.camera_status == 'on' %}bg-success{% else %}bg-secondary{% endif %}" style="font-size: 0.6rem;">
+                                                {% if p.camera_status == 'on' %}📹 ON{% else %}📷 OFF{% endif %}
+                                            </span>
+                                            <span class="badge {% if p.microphone_status == 'on' %}bg-success{% else %}bg-danger{% endif %}" style="font-size: 0.6rem;">
+                                                {% if p.microphone_status == 'on' %}🟢 MIC ON{% else %}🔴 MUTED{% endif %}
+                                            </span>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Bottom Touch-Friendly Controls Toolbar -->
+    <div class="classroom-toolbar sticky-bottom">
+        <div class="container-fluid d-flex flex-wrap justify-content-between align-items-center gap-2">
+            
+            <div class="d-flex align-items-center gap-2">
+                <!-- Microphone Toggle -->
+                <button type="button" id="btnToggleMic" class="btn btn-outline-danger px-3 py-2 fw-bold text-white">
+                    <i class="fa-solid fa-microphone-slash me-1"></i> 🔴 MIC OFF
+                </button>
+
+                <!-- Camera Toggle -->
+                <button type="button" id="btnToggleCam" class="btn btn-outline-secondary px-3 py-2 fw-bold text-white">
+                    <i class="fa-solid fa-video-slash me-1"></i> 🔴 CAMERA OFF
+                </button>
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+                <!-- Screen Share Toggle -->
+                <button type="button" id="btnToggleClassScreen" class="btn btn-outline-primary px-3 py-2 fw-bold text-white">
+                    <i class="fa-solid fa-desktop me-1"></i> 🖥️ Share Screen
+                </button>
+
+                <!-- Raise Hand Button -->
+                <button type="button" id="btnRaiseHand" class="btn btn-outline-warning px-3 py-2 fw-bold text-warning">
+                    ✋ RAISE HAND
+                </button>
+
+                <!-- Full Screen Toggle Button -->
+                <button type="button" id="btnToggleFullScreen" class="btn btn-outline-info px-3 py-2 fw-bold text-white" onclick="toggleFullScreenStage()">
+                    <i class="fa-solid fa-expand me-1"></i> ⛶ Full Screen
+                </button>
+            </div>
+
+            <div>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-danger px-4 py-2 fw-bold">
+                    🔴 Leave Class
+                </a>
+            </div>
+
+
+        </div>
+    </div>
+</div>
+
+<!-- STUDENT ASK-TO-ANSWER PROMPT MODAL -->
+<div class="modal fade" id="askToAnswerModal" data-bs-backdrop="static" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header bg-warning text-dark p-3">
+                <h5 class="modal-title fw-bold mb-0">
+                    <i class="fa-solid fa-headset me-2"></i> TEACHER QUESTION PROMPT
+                </h5>
+            </div>
+            <div class="modal-body p-4 text-center">
+                <div class="mb-3">
+                    <i class="fa-solid fa-circle-question text-warning fa-3x mb-2"></i>
+                    <h5 class="fw-bold text-dark mb-2">👨‍🏫 Your Teacher wants you to answer a question.</h5>
+                    <p class="text-muted small">Click below to explicitly turn on your microphone and speak to the classroom.</p>
+                </div>
+
+                <input type="hidden" id="pendingRequestId">
+
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-success btn-lg fw-bold" id="btnAcceptAskToAnswer">
+                        <i class="fa-solid fa-microphone me-2"></i> 🎤 UNMUTE & ANSWER
+                    </button>
+                    <button type="button" class="btn btn-warning text-dark fw-bold" id="btnRaiseHandAskToAnswer">
+                        <i class="fa-solid fa-hand me-2"></i> ✋ RAISE HAND INSTEAD
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">
+                        CANCEL
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/webrtc.js') }}"></script>
+<script>
+    const classId = {{ classroom.id }};
+    const currentUserId = {{ current_user.id }};
+    const isTeacher = {{ 'true' if current_user.role == 'teacher' else 'false' }};
+    
+    let micOn = false;
+    let camOn = false;
+    let screenSharing = false;
+    let handRaised = false;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        checkMobileInsecureContext();
+        setupClassroomControls();
+        startClassStatePolling();
+        startSignalingPolling();
+        if (!isTeacher) startStudentRequestPolling();
+
+        // Auto-initialize peer connections for existing participant cards
+        const participantCards = document.querySelectorAll('.participant-grid-card');
+        participantCards.forEach(p => {
+            const idStr = p.id.replace('card_user_', '');
+            const targetId = parseInt(idStr);
+            if (targetId && targetId !== currentUserId) {
+                window.WebRTCManager.connectToPeer(targetId, classId, null, isTeacher);
+            }
+        });
+    });
+
+
+    function checkMobileInsecureContext() {
+        const isSecure = window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+        const hasMedia = navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+
+        if (!isSecure || !hasMedia) {
+            const banner = document.getElementById('mobileHttpsNoticeBanner');
+            if (banner) banner.style.setProperty('display', 'flex', 'important');
+        }
+    }
+
+    function setupClassroomControls() {
+        // 1. Microphone Toggle
+        document.getElementById('btnToggleMic')?.addEventListener('click', async () => {
+            micOn = !micOn;
+            await applyMicState(micOn);
+        });
+
+        // 2. Camera Toggle
+        document.getElementById('btnToggleCam')?.addEventListener('click', async () => {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert("Camera and microphone require a secure HTTPS connection on this device/browser. Please use an HTTPS deployment for full mobile Live Class camera functionality.");
+                return;
+            }
+
+            camOn = !camOn;
+            const btn = document.getElementById('btnToggleCam');
+            const myVideo = document.getElementById(`video_user_${currentUserId}`);
+            const myAvatar = document.getElementById(`avatar_user_${currentUserId}`);
+
+            if (camOn) {
+                const stream = await window.WebRTCManager.initLocalMedia(`video_user_${currentUserId}`, handleSpeakingStateChange);
+                if (stream) {
+                    window.WebRTCManager.toggleCamera(true);
+                    if (myVideo) myVideo.style.display = 'block';
+                    if (myAvatar) myAvatar.style.display = 'none';
+
+                    btn.className = 'btn btn-success px-3 py-2 fw-bold text-white';
+                    btn.innerHTML = '<i class="fa-solid fa-video me-1"></i> 🟢 CAMERA ON';
+
+                    // Connect WebRTC to all other participants
+                    const participants = document.querySelectorAll('.participant-grid-card');
+                    participants.forEach(p => {
+                        const idStr = p.id.replace('card_user_', '');
+                        const targetId = parseInt(idStr);
+                        if (targetId && targetId !== currentUserId) {
+                            window.WebRTCManager.connectToPeer(targetId, classId, null, true);
+                        }
+                    });
+                }
+            } else {
+                window.WebRTCManager.toggleCamera(false);
+                if (myVideo) myVideo.style.display = 'none';
+                if (myAvatar) myAvatar.style.display = 'flex';
+
+                btn.className = 'btn btn-outline-secondary px-3 py-2 fw-bold text-white';
+                btn.innerHTML = '<i class="fa-solid fa-video-slash me-1"></i> 🔴 CAMERA OFF';
+            }
+            await updateStatusBackend();
+        });
+
+        // 3. Screen Share Toggle
+        document.getElementById('btnToggleClassScreen')?.addEventListener('click', async () => {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                alert("Screen sharing is not supported by your mobile browser. Please join from a desktop browser or device supporting getDisplayMedia.");
+                return;
+            }
+
+            screenSharing = !screenSharing;
+            const btn = document.getElementById('btnToggleClassScreen');
+            const video = document.getElementById('classMainStageVideo');
+            const placeholder = document.getElementById('classStagePlaceholder');
+
+            if (screenSharing) {
+                try {
+                    const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                    video.srcObject = screenStream;
+                    video.style.display = 'block';
+                    placeholder.style.display = 'none';
+
+                    btn.className = 'btn btn-success px-3 py-2 fw-bold text-white';
+                    btn.innerHTML = '<i class="fa-solid fa-desktop me-1"></i> 🟢 Screen Sharing Active';
+
+                    screenStream.getVideoTracks()[0].onended = () => {
+                        video.style.display = 'none';
+                        placeholder.style.display = 'block';
+                        btn.className = 'btn btn-outline-primary px-3 py-2 fw-bold text-white';
+                        btn.innerHTML = '<i class="fa-solid fa-desktop me-1"></i> 🖥️ Share Screen';
+                    };
+                } catch (e) {
+                    console.warn('Screen share declined');
+                }
+            }
+            await updateStatusBackend();
+        });
+
+        // 4. Raise Hand Toggle
+        document.getElementById('btnRaiseHand')?.addEventListener('click', async () => {
+            await triggerHandRaise();
+        });
+
+        // 5. Ask to Answer Modal Actions
+        document.getElementById('btnAcceptAskToAnswer')?.addEventListener('click', async () => {
+            const reqId = document.getElementById('pendingRequestId').value;
+            await respondToAskRequest(reqId, 'accept');
+            bootstrap.Modal.getInstance(document.getElementById('askToAnswerModal')).hide();
+            
+            // Turn on mic explicitly
+            micOn = true;
+            await applyMicState(true);
+        });
+
+        document.getElementById('btnRaiseHandAskToAnswer')?.addEventListener('click', async () => {
+            const reqId = document.getElementById('pendingRequestId').value;
+            await respondToAskRequest(reqId, 'decline');
+            bootstrap.Modal.getInstance(document.getElementById('askToAnswerModal')).hide();
+            await triggerHandRaise();
+        });
+
+        // 6. Send Chat
+        document.getElementById('btnSendClassChat')?.addEventListener('click', sendChatMessage);
+        document.getElementById('classChatInput')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendChatMessage();
+        });
+    }
+
+    async function applyMicState(status) {
+        micOn = status;
+        const btn = document.getElementById('btnToggleMic');
+
+        if (micOn) {
+            if (!window.WebRTCManager.localStream) {
+                await window.WebRTCManager.initLocalMedia(`video_user_${currentUserId}`, handleSpeakingStateChange);
+            }
+            window.WebRTCManager.toggleMicrophone(true);
+            if (btn) {
+                btn.className = 'btn btn-success px-3 py-2 fw-bold text-white';
+                btn.innerHTML = '<i class="fa-solid fa-microphone me-1"></i> 🟢 MIC ON';
+            }
+        } else {
+            window.WebRTCManager.toggleMicrophone(false);
+            if (btn) {
+                btn.className = 'btn btn-outline-danger px-3 py-2 fw-bold text-white';
+                btn.innerHTML = '<i class="fa-solid fa-microphone-slash me-1"></i> 🔴 MIC OFF';
+            }
+            handleSpeakingStateChange(false);
+        }
+        await updateStatusBackend();
+    }
+
+    async function triggerHandRaise() {
+        const response = await fetch('/api/live-class/hand-raise', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ class_id: classId, action: 'toggle' })
+        });
+
+        const res = await response.json();
+        if (res.success) {
+            handRaised = res.hand_raised;
+            const btn = document.getElementById('btnRaiseHand');
+            if (handRaised) {
+                if (btn) {
+                    btn.className = 'btn btn-warning text-dark px-3 py-2 fw-bold';
+                    btn.innerText = '✋ HAND RAISED';
+                }
+            } else {
+                if (btn) {
+                    btn.className = 'btn btn-outline-warning px-3 py-2 fw-bold text-warning';
+                    btn.innerText = '✋ RAISE HAND';
+                }
+            }
+        }
+    }
+
+    function handleSpeakingStateChange(speaking) {
+        const card = document.getElementById(`card_user_${currentUserId}`);
+        const badge = document.getElementById(`badge_speaking_${currentUserId}`);
+        if (speaking) {
+            if (card) card.classList.add('speaking');
+            if (badge) badge.style.display = 'inline-block';
+        } else {
+            if (card) card.classList.remove('speaking');
+            if (badge) badge.style.display = 'none';
+        }
+
+        fetch('/api/live-class/status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ class_id: classId, is_speaking: speaking })
+        }).catch(console.error);
+    }
+
+    async function sendChatMessage() {
+        const input = document.getElementById('classChatInput');
+        const text = input.value.trim();
+        if (!text) return;
+
+        try {
+            const response = await fetch('/api/live-class/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ class_id: classId, message: text })
+            });
+
+            const res = await response.json();
+            if (res.success) {
+                input.value = '';
+                fetchClassState();
+            }
+        } catch (err) {
+            console.error('Chat send error:', err);
+        }
+    }
+
+    async function updateStatusBackend() {
+        await fetch('/api/live-class/status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                class_id: classId,
+                camera_status: camOn ? 'on' : 'off',
+                microphone_status: micOn ? 'on' : 'off',
+                screen_status: screenSharing ? 'sharing' : 'off'
+            })
+        });
+    }
+
+    function startClassStatePolling() {
+        fetchClassState();
+        setInterval(fetchClassState, 2500);
+    }
+
+    function startSignalingPolling() {
+        setInterval(async () => {
+            try {
+                const response = await fetch(`/api/webrtc/signaling?class_id=${classId}`);
+                const data = await response.json();
+                if (data.signals && data.signals.length > 0) {
+                    for (const sig of data.signals) {
+                        const act = sig.action || sig.type || (sig.offer ? 'offer' : (sig.answer ? 'answer' : 'candidate'));
+                        const payload = sig.data || sig.offer || sig.answer || sig.candidates;
+                        if (act && payload && sig.from_user_id !== currentUserId) {
+                            await window.WebRTCManager.handleSignalingData(classId, sig.from_user_id, act, payload);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Signaling poll error:', e);
+            }
+        }, 1500);
+    }
+
+
+    function startStudentRequestPolling() {
+        setInterval(async () => {
+            try {
+                const response = await fetch(`/api/live-class/check-requests?class_id=${classId}`);
+                const data = await response.json();
+
+                if (data.has_request) {
+                    document.getElementById('pendingRequestId').value = data.request_id;
+                    const modal = new bootstrap.Modal(document.getElementById('askToAnswerModal'));
+                    modal.show();
+                }
+            } catch (e) {
+                console.error('Check requests error:', e);
+            }
+        }, 3000);
+    }
+
+    async function respondToAskRequest(reqId, action) {
+        await fetch('/api/live-class/respond-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ request_id: reqId, action: action })
+        });
+    }
+
+    async function fetchClassState() {
+        try {
+            const response = await fetch(`/api/live-class/state/${classId}`);
+            const data = await response.json();
+
+            document.getElementById('headerStudentCount').innerText = data.participant_count;
+            document.getElementById('tabPeopleCount').innerText = data.participant_count;
+            document.getElementById('raisedHandCount').innerText = data.raised_hands_count;
+
+            document.getElementById('metricTotalStudents').innerText = data.participant_count;
+            document.getElementById('metricCameraOn').innerText = data.camera_on_count;
+            document.getElementById('metricMicOn').innerText = data.mic_on_count;
+            document.getElementById('metricSpeaking').innerText = data.speaking_count;
+            document.getElementById('metricRaisedHands').innerText = data.raised_hands_count;
+            document.getElementById('metricScreenShare').innerText = data.screen_sharing_count;
+
+            const raisedContainer = document.getElementById('raisedHandsList');
+            if (data.raised_hands.length > 0) {
+                raisedContainer.innerHTML = data.raised_hands.map(h => `
+                    <div class="p-2 bg-dark border border-warning rounded-3 d-flex justify-content-between align-items-center">
+                        <span class="small fw-bold text-warning">✋ ${h.student_name}</span>
+                        ${isTeacher ? `
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-xs btn-warning py-0 px-2 fw-bold text-dark" onclick="askStudentToAnswer(${h.student_id})">ASK TO ANSWER</button>
+                                <button class="btn btn-xs btn-outline-light py-0 px-1" onclick="acknowledgeHand(${h.student_id})">LOWER</button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+            } else {
+                raisedContainer.innerHTML = '<div class="text-muted small">No raised hands right now.</div>';
+            }
+
+            const chatBox = document.getElementById('classChatBox');
+            chatBox.innerHTML = data.messages.map(m => `
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fw-bold text-info small">${m.sender_name}</span>
+                        <small class="text-muted" style="font-size: 0.7rem;">${m.timestamp}</small>
+                    </div>
+                    <div class="p-2 rounded-3 bg-dark text-light small border border-secondary">
+                        ${m.message}
+                    </div>
+                </div>
+            `).join('');
+
+        } catch (err) {
+            console.error('Fetch class state error:', err);
+        }
+    }
+
+    window.askStudentToAnswer = async function(studentId) {
+        if (!isTeacher) return;
+        const response = await fetch('/api/live-class/ask-to-answer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ class_id: classId, student_id: studentId })
+        });
+        const res = await response.json();
+        if (res.success) {
+            if (window.showToast) window.showToast('Question prompt sent to student!', 'success');
+            else alert('Prompt sent to student.');
+        }
+    };
+
+    window.teacherMuteStudent = async function(studentId) {
+        if (!isTeacher) return;
+        await fetch('/api/live-class/status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ class_id: classId, microphone_status: 'off' })
+        });
+        fetchClassState();
+    };
+
+    window.acknowledgeHand = async function(studentId) {
+        await fetch('/api/live-class/hand-raise', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ class_id: classId, action: 'acknowledge', student_id: studentId })
+        });
+        fetchClassState();
+    };
+
+    function switchSidebarTab(tab) {
+        if (tab === 'chat') {
+            document.getElementById('tabChatContent').style.display = 'flex';
+            document.getElementById('tabPeopleContent').style.display = 'none';
+            document.getElementById('tabChatBtn').classList.add('active');
+            document.getElementById('tabPeopleBtn').classList.remove('active');
+        } else {
+            document.getElementById('tabChatContent').style.display = 'none';
+            document.getElementById('tabPeopleContent').style.display = 'block';
+            document.getElementById('tabPeopleBtn').classList.add('active');
+            document.getElementById('tabChatBtn').classList.remove('active');
+        }
+    }
+
+    window.toggleFullScreenStage = function() {
+        const elem = document.getElementById('primaryVideoStage') || document.documentElement;
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen();
+            }
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        }
+    };
+</script>
+{% endblock %}
+

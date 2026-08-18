@@ -1,0 +1,292 @@
+{% extends 'base.html' %}
+
+{% block title %}Live Exam Monitor - Smart Online Examination Platform{% endblock %}
+
+{% block content %}
+<section class="py-4 bg-light" style="min-height: 85vh;">
+    <div class="container">
+        <!-- Header -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+            <div>
+                <h3 class="fw-800 text-dark mb-1"><i class="fa-solid fa-shield-halved text-danger me-2"></i> LIVE EXAM MONITOR</h3>
+                <p class="text-muted m-0">Real-time WebRTC camera proctoring, screen monitoring, tab-switch alerts, and student warning engine.</p>
+            </div>
+            
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-danger px-3 py-2 fs-6 d-flex align-items-center">
+                    <i class="fa-solid fa-circle text-white me-2 fs-6"></i> 🟢 Realtime Feed Active
+                </span>
+            </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <small class="fw-bold text-muted text-uppercase me-2"><i class="fa-solid fa-filter me-1"></i> Filter Students:</small>
+                <button type="button" class="btn btn-sm btn-primary fw-bold filter-btn active" onclick="filterCards('all')">All Students</button>
+                <button type="button" class="btn btn-sm btn-outline-success fw-bold filter-btn" onclick="filterCards('camera-active')">Camera Active</button>
+                <button type="button" class="btn btn-sm btn-outline-danger fw-bold filter-btn" onclick="filterCards('camera-off')">Camera Off</button>
+                <button type="button" class="btn btn-sm btn-outline-info fw-bold filter-btn" onclick="filterCards('screen-active')">Screen Sharing</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary fw-bold filter-btn" onclick="filterCards('screen-off')">Screen Not Sharing</button>
+                <button type="button" class="btn btn-sm btn-outline-warning text-dark fw-bold filter-btn" onclick="filterCards('warnings')">Warnings</button>
+            </div>
+        </div>
+
+        <!-- Student Monitoring Cards Responsive Grid -->
+        <div class="row g-4 mb-4" id="studentCardsContainer">
+            {% if active_attempts %}
+                {% for a in active_attempts %}
+                    <div class="col-lg-4 col-md-6 student-card-wrapper" 
+                         data-camera="{{ a.camera_status }}" 
+                         data-screen="{{ a.screen_status }}" 
+                         data-switches="{{ a.tab_switches }}">
+                        
+                        <div class="card border-0 shadow-md rounded-4 overflow-hidden h-100 bg-white">
+                            <!-- Card Header -->
+                            <div class="card-header bg-navy text-white p-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #1c2541, #0b132b);">
+                                <span class="badge bg-danger"><i class="fa-solid fa-video me-1"></i> 📹 LIVE</span>
+                                <span class="badge bg-primary">Attempt #{{ a.id }}</span>
+                            </div>
+
+                            <!-- Live Camera Stream Box -->
+                            <div class="position-relative bg-dark text-center" style="height: 180px;">
+                                <video id="cam_feed_{{ a.student_id }}" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
+                                <div class="position-absolute bottom-0 start-0 w-100 p-2 text-start text-white" style="background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);">
+                                    <h6 class="fw-bold m-0">{{ a.student.name }}</h6>
+                                    <small class="text-light opacity-75">Exam: {{ a.exam.title }}</small>
+                                </div>
+                            </div>
+
+                            <!-- Card Body Indicators -->
+                            <div class="card-body p-3">
+                                <div class="d-flex flex-column gap-2 mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="small font-weight-bold">Camera:</span>
+                                        {% if a.camera_status == 'active' %}
+                                            <span class="badge bg-success py-1 px-2"><i class="fa-solid fa-camera me-1"></i> 🟢 Camera Active</span>
+                                        {% else %}
+                                            <span class="badge bg-danger py-1 px-2"><i class="fa-solid fa-video-slash me-1"></i> 🔴 Camera Off</span>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="small font-weight-bold">Screen Share:</span>
+                                        {% if a.screen_status == 'sharing' %}
+                                            <span class="badge bg-success py-1 px-2"><i class="fa-solid fa-desktop me-1"></i> 🟢 Screen Sharing Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary py-1 px-2"><i class="fa-solid fa-desktop me-1"></i> ⚪ Screen Not Shared</span>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="small font-weight-bold">Tab Switches:</span>
+                                        <span class="badge {% if a.tab_switches >= 3 %}bg-danger{% elif a.tab_switches >= 1 %}bg-warning text-dark{% else %}bg-success{% endif %} py-1 px-2">
+                                            ⚠️ Tab Switches: {{ a.tab_switches }}
+                                        </span>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="small font-weight-bold">Time Remaining:</span>
+                                        <span class="fw-bold text-primary font-monospace">⏱ 42:15</span>
+                                    </div>
+                                </div>
+
+                                <!-- Action Buttons -->
+                                <div class="d-flex gap-2 border-top pt-3">
+                                    <button type="button" class="btn btn-sm btn-outline-primary flex-grow-1 fw-bold" onclick="openStudentScreenModal({{ a.exam_id }}, {{ a.student_id }}, '{{ a.student.name|e }}', '{{ a.screen_status }}')">
+                                        [VIEW SCREEN]
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-warning text-dark flex-grow-1 fw-bold" onclick="openWarningModal({{ a.exam_id }}, {{ a.student_id }}, '{{ a.student.name|e }}')">
+                                        [SEND WARNING]
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-12 text-center py-5 text-muted">
+                    <i class="fa-solid fa-user-check fa-3x mb-3 text-secondary"></i>
+                    <h5>No active student examination sessions right now.</h5>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Real-Time Activity Log Feed -->
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h6 class="fw-bold m-0 text-dark"><i class="fa-solid fa-list-ul text-warning me-2"></i> Real-Time Activity & Warning Audit Logs</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% if recent_events %}
+                        {% for event in recent_events %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center p-3">
+                                <div>
+                                    <span class="badge bg-warning text-dark me-2">{{ event.event_type }}</span>
+                                    <span class="fw-bold text-dark">Student #{{ event.student_id }}</span>: {{ event.details }}
+                                </div>
+                                <small class="text-muted"><i class="fa-regular fa-clock me-1"></i> {{ event.timestamp.strftime('%H:%M:%S') }}</small>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="p-3 text-center text-muted small">No activity logs recorded yet.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- TEACHER SEND WARNING MODAL -->
+<div class="modal fade" id="sendWarningModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-warning text-dark p-3">
+                <h5 class="modal-title fw-bold mb-0"><i class="fa-solid fa-triangle-exclamation me-2"></i> SEND WARNING TO STUDENT</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="warningExamId">
+                <input type="hidden" id="warningStudentId">
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark">Student Name:</label>
+                    <input type="text" id="warningStudentName" class="form-control bg-light" readonly>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark">Quick Messages:</label>
+                    <select class="form-select mb-2" onchange="document.getElementById('warningTextMsg').value = this.value">
+                        <option value="Please return to the examination window.">Please return to the examination window.</option>
+                        <option value="Please keep your camera visible.">Please keep your camera visible.</option>
+                        <option value="Your screen sharing has stopped.">Your screen sharing has stopped.</option>
+                        <option value="Please maintain proper examination conditions.">Please maintain proper examination conditions.</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark">Warning Message:</label>
+                    <textarea id="warningTextMsg" class="form-control" rows="3" placeholder="Type warning message here...">Please return to the examination window.</textarea>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary flex-grow-1" data-bs-dismiss="modal">CANCEL</button>
+                    <button type="button" id="btnSubmitWarning" class="btn btn-warning text-dark flex-grow-1 fw-bold">SEND WARNING</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- WebRTC Student Screen Viewer Modal (No Alert Error!) -->
+<div class="modal fade" id="viewScreenModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header bg-navy text-white p-3" style="background: linear-gradient(135deg, #1c2541, #0b132b);">
+                <div>
+                    <div id="screenModalBadge">
+                        <span class="badge bg-success mb-1">🟢 LIVE WEBRTC SCREEN STREAM</span>
+                    </div>
+                    <h5 class="modal-title fw-bold text-white mb-0" id="screenModalTitle">Student Screen Stream</h5>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 bg-dark text-center" style="min-height: 400px; display: flex; align-items: center; justify-content: center;">
+                <video id="webrtcStudentScreenVideo" autoplay playsinline muted style="width: 100%; max-height: 520px; object-fit: contain; display: none;"></video>
+                
+                <div id="screenNotSharedPlaceholder" class="p-5 text-center text-white" style="display: none;">
+                    <i class="fa-solid fa-desktop text-secondary fa-4x mb-3"></i>
+                    <h5 class="fw-bold text-white">⚪ Screen Not Shared</h5>
+                    <p class="text-muted small m-0">The student has not enabled optional screen sharing for this exam attempt.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/webrtc.js') }}"></script>
+<script>
+    function openWarningModal(examId, studentId, studentName) {
+        document.getElementById('warningExamId').value = examId;
+        document.getElementById('warningStudentId').value = studentId;
+        document.getElementById('warningStudentName').value = studentName;
+        
+        const modal = new bootstrap.Modal(document.getElementById('sendWarningModal'));
+        modal.show();
+    }
+
+    document.getElementById('btnSubmitWarning')?.addEventListener('click', async () => {
+        const examId = document.getElementById('warningExamId').value;
+        const studentId = document.getElementById('warningStudentId').value;
+        const msg = document.getElementById('warningTextMsg').value.trim();
+
+        if (!msg) {
+            alert('Please enter a warning message.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/monitoring/warning', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ exam_id: examId, student_id: studentId, message: msg })
+            });
+
+            const res = await response.json();
+            if (res.success) {
+                bootstrap.Modal.getInstance(document.getElementById('sendWarningModal')).hide();
+                if (window.showToast) window.showToast('Warning sent to student successfully!', 'success');
+            } else {
+                alert(res.message || 'Error sending warning.');
+            }
+        } catch (err) {
+            console.error('Warning submit error:', err);
+        }
+    });
+
+    // Clean Error-Free Screen View Modal Opener
+    function openStudentScreenModal(examId, studentId, studentName, screenStatus) {
+        document.getElementById('screenModalTitle').innerText = `Screen Stream - Student: ${studentName}`;
+        const modal = new bootstrap.Modal(document.getElementById('viewScreenModal'));
+        modal.show();
+
+        const video = document.getElementById('webrtcStudentScreenVideo');
+        const placeholder = document.getElementById('screenNotSharedPlaceholder');
+        const badge = document.getElementById('screenModalBadge');
+
+        if (screenStatus !== 'sharing') {
+            video.style.display = 'none';
+            placeholder.style.display = 'block';
+            badge.innerHTML = '<span class="badge bg-secondary mb-1">⚪ Screen Not Shared</span>';
+        } else {
+            placeholder.style.display = 'none';
+            badge.innerHTML = '<span class="badge bg-success mb-1">🟢 LIVE WEBRTC SCREEN STREAM</span>';
+            if (window.WebRTCManager) {
+                window.WebRTCManager.viewStudentScreenStream(examId, studentId, video, badge);
+            }
+        }
+    }
+
+    function filterCards(filter) {
+        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active', 'btn-primary'));
+        event.target.classList.add('active', 'btn-primary');
+
+        const wrappers = document.querySelectorAll('.student-card-wrapper');
+        wrappers.forEach(w => {
+            const cam = w.getAttribute('data-camera');
+            const scr = w.getAttribute('data-screen');
+            const sw = parseInt(w.getAttribute('data-switches') || '0');
+
+            if (filter === 'all') w.style.display = 'block';
+            else if (filter === 'camera-active') w.style.display = (cam === 'active') ? 'block' : 'none';
+            else if (filter === 'camera-off') w.style.display = (cam !== 'active') ? 'block' : 'none';
+            else if (filter === 'screen-active') w.style.display = (scr === 'sharing') ? 'block' : 'none';
+            else if (filter === 'screen-off') w.style.display = (scr !== 'sharing') ? 'block' : 'none';
+            else if (filter === 'warnings') w.style.display = (sw >= 1) ? 'block' : 'none';
+        });
+    }
+</script>
+{% endblock %}

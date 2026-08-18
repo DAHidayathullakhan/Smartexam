@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+
+{% block title %}Interactive Digital ViewBoard - Smart Online Examination Platform{% endblock %}
+
+{% block content %}
+<section class="py-4 bg-light">
+    <div class="container-fluid px-lg-5">
+        <!-- Top Toolbar Header -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="fw-800 text-dark mb-0">
+                    <i class="fa-solid fa-chalkboard-user text-primary me-2"></i> DIGITAL VIEWBOARD & WHITEBOARD
+                </h4>
+                <small class="text-muted">Draw diagrams, write mathematical formulas, and download whiteboard snapshots.</small>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <span class="badge bg-success px-3 py-2 fs-6">
+                    <i class="fa-solid fa-circle text-white me-1 fs-6"></i> 🟢 Teacher is Live
+                </span>
+                <button type="button" id="btnExportBoard" class="btn btn-primary-gradient">
+                    DOWNLOAD VIEWBOARD 🎨
+                </button>
+            </div>
+        </div>
+
+        <!-- Canvas Container -->
+        <div class="viewboard-container">
+            <!-- Whiteboard Toolbar -->
+            <div class="viewboard-toolbar">
+                <div class="tool-group">
+                    <span class="small fw-bold text-light me-2">Tools:</span>
+                    <button type="button" class="tool-btn viewboard-tool active" data-tool="pen" title="Pen Tool">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button type="button" class="tool-btn viewboard-tool" data-tool="line" title="Draw Line">
+                        <i class="fa-solid fa-slash"></i>
+                    </button>
+                    <button type="button" class="tool-btn viewboard-tool" data-tool="rectangle" title="Rectangle Shape">
+                        <i class="fa-regular fa-square"></i>
+                    </button>
+                    <button type="button" class="tool-btn viewboard-tool" data-tool="circle" title="Circle Shape">
+                        <i class="fa-regular fa-circle"></i>
+                    </button>
+                    <button type="button" class="tool-btn viewboard-tool" data-tool="eraser" title="Eraser">
+                        <i class="fa-solid fa-eraser"></i>
+                    </button>
+                </div>
+
+                <div class="tool-group">
+                    <label class="small fw-bold text-light me-2">Stroke Color:</label>
+                    <input type="color" id="boardColorPicker" value="#2563eb" class="form-control form-control-color" style="width: 40px; height: 36px; cursor: pointer;">
+                </div>
+
+                <div class="tool-group">
+                    <label class="small fw-bold text-light me-2">Brush Width:</label>
+                    <input type="range" id="boardWidthRange" min="1" max="25" value="3" class="form-range" style="width: 120px;">
+                </div>
+
+                <div class="tool-group ms-auto">
+                    <button type="button" id="btnUndoBoard" class="btn btn-sm btn-outline-light me-2">
+                        <i class="fa-solid fa-rotate-left me-1"></i> Undo
+                    </button>
+                    <button type="button" id="btnClearBoard" class="btn btn-sm btn-danger">
+                        <i class="fa-solid fa-trash-can me-1"></i> Clear Canvas
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Canvas Board -->
+            <canvas id="canvasBoard"></canvas>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/viewboard.js') }}"></script>
+{% endblock %}

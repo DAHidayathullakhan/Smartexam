@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block title %}Online Examinations - Smart Online Examination Platform{% endblock %}
+
+{% block content %}
+<section class="py-4 bg-light" style="min-height: 80vh;">
+    <div class="container">
+        <!-- Header -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+            <div>
+                <h3 class="fw-800 text-dark mb-1"><i class="fa-solid fa-pen-to-square text-primary me-2"></i> Online Examinations Portal</h3>
+                <p class="text-muted m-0">Take proctored computer-based tests with camera verification and tab-switch safety.</p>
+            </div>
+            {% if current_user and current_user.role == 'teacher' %}
+                <a href="{{ url_for('monitoring') }}" class="btn btn-outline-danger font-weight-bold">
+                    <i class="fa-solid fa-shield-halved me-1"></i> PROCTOR MONITORING DASHBOARD
+                </a>
+            {% endif %}
+        </div>
+
+        <!-- Exam Cards Grid -->
+        <div class="row g-4">
+            {% if exams %}
+                {% for exam in exams %}
+                    <div class="col-lg-6">
+                        <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden">
+                            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                                <span class="badge bg-primary px-3 py-2 fs-6">{{ exam.subject.code }}</span>
+                                <span class="badge bg-success-subtle text-success border border-success fw-bold">
+                                    <i class="fa-solid fa-circle text-success me-1"></i> ACTIVE EXAM
+                                </span>
+                            </div>
+                            <div class="card-body p-4">
+                                <h4 class="fw-bold text-dark mb-2">{{ exam.title }}</h4>
+                                <p class="text-muted small mb-4">{{ exam.description }}</p>
+
+                                <div class="row text-center g-2 p-3 bg-light rounded-3 mb-4 border">
+                                    <div class="col-4">
+                                        <div class="small text-muted fw-bold text-uppercase">Duration</div>
+                                        <div class="fw-bold text-dark fs-5"><i class="fa-regular fa-clock text-primary me-1"></i> {{ exam.duration_minutes }}m</div>
+                                    </div>
+                                    <div class="col-4 border-start">
+                                        <div class="small text-muted fw-bold text-uppercase">Total Marks</div>
+                                        <div class="fw-bold text-dark fs-5">{{ exam.total_marks }}</div>
+                                    </div>
+                                    <div class="col-4 border-start">
+                                        <div class="small text-muted fw-bold text-uppercase">Questions</div>
+                                        <div class="fw-bold text-dark fs-5">{{ exam.questions|length }}</div>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="small text-muted">
+                                        <i class="fa-solid fa-camera text-primary me-1"></i> Camera Monitoring Required
+                                    </div>
+
+                                    {% if current_user %}
+                                        {% if current_user.role == 'student' %}
+                                            {% if exam.id in attempted_exam_ids %}
+                                                <span class="badge bg-success px-3 py-2 fs-6"><i class="fa-solid fa-circle-check"></i> Completed</span>
+                                            {% else %}
+                                                <a href="{{ url_for('take_exam', exam_id=exam.id) }}" class="btn btn-primary-gradient px-4 py-2">
+                                                    START EXAM →
+                                                </a>
+                                            {% endif %}
+                                        {% else %}
+                                            <a href="{{ url_for('monitoring') }}" class="btn btn-outline-custom">
+                                                Monitor Sessions 📹
+                                            </a>
+                                        {% endif %}
+                                    {% else %}
+                                        <a href="{{ url_for('login') }}" class="btn btn-primary-gradient px-4 py-2">
+                                            Log In to Take Exam
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-12 text-center py-5 text-muted">
+                    <i class="fa-solid fa-pen-slash fa-3x mb-3 text-secondary"></i>
+                    <h5>No active examinations available.</h5>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}

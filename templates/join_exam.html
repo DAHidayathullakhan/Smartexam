@@ -1,0 +1,270 @@
+{% extends 'base.html' %}
+
+{% block title %}Join Examination - Enter Exam Code{% endblock %}
+
+{% block content %}
+<section class="py-5" style="min-height: 85vh; background: radial-gradient(circle at 50% 30%, rgba(37, 99, 235, 0.1) 0%, transparent 60%);">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-7">
+
+                <!-- STEP 1: Enter Exam Code Card -->
+                <div class="card border-0 shadow-lg rounded-4 overflow-hidden mb-4" id="enterCodeCard">
+                    <div class="card-header text-white text-center p-4" style="background: linear-gradient(135deg, #0b132b, #1c2541);">
+                        <div class="brand-icon-wrapper mx-auto mb-2" style="width: 52px; height: 52px; font-size: 1.5rem; background: var(--primary-gradient);">
+                            <i class="fa-solid fa-key"></i>
+                        </div>
+                        <h3 class="fw-800 text-white mb-1">ENTER EXAM CODE</h3>
+                        <p class="small text-light opacity-90 mb-0">Enter the exam code provided by your instructor</p>
+                    </div>
+
+                    <div class="card-body p-4 text-center">
+                        <div class="mb-4">
+                            <input type="text" id="inputExamCode" class="form-control text-center text-uppercase fw-800 py-3 fs-2" placeholder="PY7K92X" maxlength="10" style="letter-spacing: 6px; font-family: 'Space Grotesk', monospace;">
+                            <div class="form-text mt-2">Example: <strong>PY7K92X</strong></div>
+                        </div>
+
+                        <!-- Invalid Code Error Alert -->
+                        <div id="invalidCodeAlert" class="alert alert-danger border-0 shadow-sm text-start mb-3" style="display: none;">
+                            <div class="fw-bold fs-6"><i class="fa-solid fa-circle-xmark me-2"></i> ❌ Invalid Exam Code</div>
+                            <div class="small mt-1">Please check the code and try again.</div>
+                        </div>
+
+                        <button type="button" id="btnVerifyCode" class="btn btn-primary-gradient w-100 py-3 fw-bold fs-6 shadow-md">
+                            JOIN EXAM →
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STEP 2: Exam Found Confirmation Card -->
+                <div class="card border-0 shadow-lg rounded-4 overflow-hidden mb-4" id="examFoundCard" style="display: none;">
+                    <div class="card-header bg-success text-white p-4" style="background: linear-gradient(135deg, #059669, #10b981);">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-circle-check fs-3"></i>
+                            <div>
+                                <span class="badge bg-white text-success fw-bold">EXAM FOUND</span>
+                                <h4 class="modal-title fw-bold text-white mb-0" id="foundExamTitle">Python Programming Test</h4>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-4">
+                        <div class="p-3 bg-light rounded-3 mb-4 border">
+                            <div class="row g-3 text-center">
+                                <div class="col-6">
+                                    <small class="text-muted fw-bold text-uppercase d-block">Subject</small>
+                                    <span class="fw-bold text-dark fs-6" id="foundExamSubject">Python</span>
+                                </div>
+                                <div class="col-6 border-start">
+                                    <small class="text-muted fw-bold text-uppercase d-block">Duration</small>
+                                    <span class="fw-bold text-dark fs-6" id="foundExamDuration">60 Minutes</span>
+                                </div>
+                                <div class="col-6 border-top pt-2">
+                                    <small class="text-muted fw-bold text-uppercase d-block">Questions</small>
+                                    <span class="fw-bold text-dark fs-6" id="foundExamQuestions">30</span>
+                                </div>
+                                <div class="col-6 border-top border-start pt-2">
+                                    <small class="text-muted fw-bold text-uppercase d-block">Maximum Marks</small>
+                                    <span class="fw-bold text-dark fs-6" id="foundExamMarks">50</span>
+                                </div>
+                                <div class="col-12 border-top pt-2">
+                                    <small class="text-muted fw-bold text-uppercase d-block">Teacher</small>
+                                    <span class="fw-bold text-dark" id="foundExamTeacher">Dr. Sarah Jenkins</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-secondary flex-grow-1" onclick="cancelJoin()">
+                                CANCEL
+                            </button>
+                            <button type="button" id="btnProceedCamera" class="btn btn-primary-gradient flex-grow-1 py-2 fw-bold">
+                                CONTINUE →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 3: Mandatory Camera & Optional Screen Sharing Readiness Card -->
+                <div class="card border-0 shadow-lg rounded-4 overflow-hidden mb-4" id="hardwareCard" style="display: none;">
+                    <div class="card-header bg-navy text-white p-4" style="background: linear-gradient(135deg, #1c2541, #0b132b);">
+                        <h4 class="fw-bold text-white mb-1"><i class="fa-solid fa-camera text-primary me-2"></i> CAMERA VERIFICATION & READINESS</h4>
+                        <p class="small text-light opacity-90 mb-0">Camera access is required to attend this examination.</p>
+                    </div>
+
+                    <div class="card-body p-4 text-center">
+                        <!-- Camera Section (MANDATORY) -->
+                        <div class="p-3 bg-light rounded-3 border mb-4">
+                            <h6 class="fw-bold text-dark mb-2">1. Mandatory Camera Permission</h6>
+                            <div class="camera-preview-box mx-auto mb-3" style="width: 240px; height: 150px; background: #000; border-radius: 12px; overflow: hidden; position: relative;">
+                                <video id="preCheckCameraFeed" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
+                            </div>
+
+                            <div id="cameraStatusBadge" class="mb-3">
+                                <span class="badge bg-danger fs-6 px-3 py-2"><i class="fa-solid fa-video-slash me-1"></i> 🔴 Camera Required</span>
+                            </div>
+
+                            <button type="button" id="btnGrantCamera" class="btn btn-primary-gradient px-4">
+                                Grant Camera Permission 📹
+                            </button>
+                            <div class="small text-muted mt-2">Camera access is mandatory to start this examination.</div>
+                        </div>
+
+                        <!-- Screen Sharing Section (OPTIONAL) -->
+                        <div class="p-3 bg-light rounded-3 border mb-4">
+                            <h6 class="fw-bold text-dark mb-1">2. Screen Sharing (Optional)</h6>
+                            <p class="small text-muted mb-2">Screen sharing is optional. You can proceed without screen sharing.</p>
+
+                            <div id="screenStatusBadge" class="mb-3">
+                                <span class="badge bg-secondary fs-6 px-3 py-2"><i class="fa-solid fa-desktop me-1"></i> ⚪ Screen Sharing Off</span>
+                            </div>
+
+                            <button type="button" id="btnGrantScreenOptional" class="btn btn-outline-primary px-4">
+                                Share Screen (Optional) 💻
+                            </button>
+                        </div>
+
+                        <!-- EXAM READY SUMMARY -->
+                        <div id="examReadySummary" class="p-3 bg-success-subtle border border-success rounded-3 mb-4 text-start" style="display: none;">
+                            <h6 class="fw-bold text-success mb-2"><i class="fa-solid fa-circle-check me-2"></i> EXAM READY</h6>
+                            <div class="small text-dark mb-1"><i class="fa-solid fa-check text-success me-2"></i> Camera Connected</div>
+                            <div class="small text-dark" id="summaryScreenShareText"><i class="fa-solid fa-minus text-secondary me-2"></i> Screen Sharing: Optional (Off)</div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-secondary flex-grow-1" onclick="cancelJoin()">
+                                CANCEL
+                            </button>
+                            <button type="button" id="btnStartExamMain" class="btn btn-success flex-grow-1 py-3 fw-bold fs-5 shadow-lg" disabled>
+                                START EXAM
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const btnVerifyCode = document.getElementById('btnVerifyCode');
+        const inputExamCode = document.getElementById('inputExamCode');
+        const invalidCodeAlert = document.getElementById('invalidCodeAlert');
+        
+        const enterCodeCard = document.getElementById('enterCodeCard');
+        const examFoundCard = document.getElementById('examFoundCard');
+        const hardwareCard = document.getElementById('hardwareCard');
+
+        const btnGrantCamera = document.getElementById('btnGrantCamera');
+        const btnGrantScreenOptional = document.getElementById('btnGrantScreenOptional');
+        const cameraStatusBadge = document.getElementById('cameraStatusBadge');
+        const screenStatusBadge = document.getElementById('screenStatusBadge');
+        const btnStartExamMain = document.getElementById('btnStartExamMain');
+        const preCheckCameraFeed = document.getElementById('preCheckCameraFeed');
+
+        let cameraGranted = false;
+        let screenSharingActive = false;
+        let targetStartUrl = '#';
+
+        // Code verification
+        btnVerifyCode?.addEventListener('click', async () => {
+            const code = inputExamCode.value.trim();
+            if (!code) {
+                invalidCodeAlert.style.display = 'block';
+                return;
+            }
+
+            invalidCodeAlert.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/exam/verify-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ exam_code: code })
+                });
+
+                const res = await response.json();
+                if (!res.valid) {
+                    invalidCodeAlert.style.display = 'block';
+                } else {
+                    document.getElementById('foundExamTitle').innerText = res.exam.title;
+                    document.getElementById('foundExamSubject').innerText = res.exam.subject_name;
+                    document.getElementById('foundExamDuration').innerText = `${res.exam.duration_minutes} Minutes`;
+                    document.getElementById('foundExamQuestions').innerText = res.exam.questions_count;
+                    document.getElementById('foundExamMarks').innerText = res.exam.total_marks;
+                    document.getElementById('foundExamTeacher').innerText = res.exam.teacher_name;
+                    
+                    targetStartUrl = res.start_url;
+
+                    enterCodeCard.style.display = 'none';
+                    examFoundCard.style.display = 'block';
+                }
+            } catch (err) {
+                console.error('Code verification error:', err);
+                invalidCodeAlert.style.display = 'block';
+            }
+        });
+
+        document.getElementById('btnProceedCamera')?.addEventListener('click', () => {
+            examFoundCard.style.display = 'none';
+            hardwareCard.style.display = 'block';
+        });
+
+        // Mandatory Camera Permission Handler
+        btnGrantCamera?.addEventListener('click', async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                if (preCheckCameraFeed) preCheckCameraFeed.srcObject = stream;
+                cameraGranted = true;
+
+                cameraStatusBadge.innerHTML = '<span class="badge bg-success fs-6 px-3 py-2"><i class="fa-solid fa-circle-check me-1"></i> 🟢 Camera Ready</span>';
+                btnGrantCamera.className = 'btn btn-success px-4 fw-bold';
+                btnGrantCamera.innerText = 'Camera Connected ✓';
+                btnGrantCamera.disabled = true;
+
+                // Unlock START EXAM button because Camera is mandatory & ready!
+                btnStartExamMain.disabled = false;
+                document.getElementById('examReadySummary').style.display = 'block';
+            } catch (err) {
+                console.error('Camera permission denied:', err);
+                cameraStatusBadge.innerHTML = '<span class="badge bg-danger fs-6 px-3 py-2"><i class="fa-solid fa-circle-xmark me-1"></i> 🔴 Camera Required</span>';
+                alert('Camera access is required to start this examination.');
+            }
+        });
+
+        // Optional Screen Share Permission Handler
+        btnGrantScreenOptional?.addEventListener('click', async () => {
+            try {
+                const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                screenSharingActive = true;
+
+                screenStatusBadge.innerHTML = '<span class="badge bg-success fs-6 px-3 py-2"><i class="fa-solid fa-desktop me-1"></i> 🟢 Screen Sharing Active</span>';
+                btnGrantScreenOptional.className = 'btn btn-success px-4 fw-bold';
+                btnGrantScreenOptional.innerText = 'Screen Sharing Active ✓';
+                document.getElementById('summaryScreenShareText').innerHTML = '<i class="fa-solid fa-check text-success me-2"></i> Screen Sharing: Active';
+            } catch (err) {
+                console.warn('Optional screen share declined:', err);
+            }
+        });
+
+        btnStartExamMain?.addEventListener('click', () => {
+            if (!cameraGranted) {
+                alert('Camera access is required to start this examination.');
+                return;
+            }
+            window.location.href = targetStartUrl;
+        });
+
+        window.cancelJoin = function() {
+            hardwareCard.style.display = 'none';
+            examFoundCard.style.display = 'none';
+            enterCodeCard.style.display = 'block';
+            inputExamCode.value = '';
+        };
+    });
+</script>
+{% endblock %}

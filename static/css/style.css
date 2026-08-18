@@ -1,0 +1,170 @@
+/* 
+   Smart Exam Platform - Premium Unified EdTech Theme & Design System
+*/
+
+:root {
+    --primary-blue: #2563eb;
+    --primary-purple: #7c3aed;
+    --navy-dark: #0b132b;
+    --navy-card: #1c2541;
+    --primary-gradient: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+    --hero-gradient: linear-gradient(135deg, #0b132b 0%, #1c2541 60%, #2563eb 100%);
+}
+
+body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #f8fafc;
+    color: #1e293b;
+    margin: 0;
+    padding: 0;
+}
+
+.fw-800 { font-weight: 800; }
+.bg-navy { background-color: #0b132b !important; }
+
+/* Dynamic Animations */
+.animate-pulse {
+    animation: pulse 2s infinite;
+}
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Gradient Action Buttons */
+.btn {
+    border-radius: 8px;
+    font-weight: 700;
+    transition: all 0.2s ease-in-out;
+}
+
+.btn-primary, .btn-primary-gradient {
+    background: var(--primary-gradient) !important;
+    border: none !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3) !important;
+}
+
+.btn-primary:hover, .btn-primary-gradient:hover {
+    opacity: 0.92;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.4) !important;
+    color: #ffffff !important;
+}
+
+.btn-outline-custom {
+    background-color: transparent !important;
+    border: 2px solid #2563eb !important;
+    color: #2563eb !important;
+}
+
+.btn-outline-custom:hover {
+    background: var(--primary-gradient) !important;
+    border-color: transparent !important;
+    color: #ffffff !important;
+}
+
+/* Dark Navy Navbar Header */
+.navbar-custom {
+    background-color: #0b132b !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.navbar-brand-logo {
+    font-weight: 800;
+    font-size: 1.35rem;
+    color: #ffffff !important;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.brand-icon-wrapper {
+    width: 40px;
+    height: 40px;
+    background: var(--primary-gradient);
+    color: #ffffff;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+.nav-link-custom {
+    font-weight: 700;
+    color: #cbd5e1 !important;
+    padding: 0.55rem 1rem !important;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+.nav-link-custom:hover, .nav-link-custom.active {
+    color: #ffffff !important;
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Hero Section */
+.hero-section {
+    background: var(--hero-gradient);
+    color: white;
+    padding: 4rem 0;
+    position: relative;
+    overflow: hidden;
+}
+.hero-title {
+    font-size: 2.75rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.hero-subtitle {
+    font-size: 1.15rem;
+    color: #94a3b8;
+    margin-bottom: 2rem;
+    max-width: 600px;
+}
+
+/* Cards & Containers */
+.card {
+    border-radius: 14px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+}
+
+.subject-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.subject-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+}
+.subject-card-header {
+    background: #0b132b;
+    color: white;
+    padding: 1.5rem;
+    position: relative;
+}
+
+/* Touch-Friendly Bottom Classroom Toolbar */
+.classroom-toolbar {
+    background: #1c2541;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0.85rem 1.25rem;
+    z-index: 1000;
+}
+
+/* Media Queries */
+@media (max-width: 767.98px) {
+    .hero-title {
+        font-size: 2rem;
+    }
+}

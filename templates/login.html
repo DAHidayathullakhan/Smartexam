@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block title %}Log In - Smart Online Examination Platform{% endblock %}
+
+{% block content %}
+<section class="py-5" style="min-height: 80vh; background: radial-gradient(circle at 50% 30%, rgba(37, 99, 235, 0.1) 0%, transparent 60%);">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-5">
+                <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+                    <div class="card-header bg-navy text-white text-center p-4" style="background: linear-gradient(135deg, #1c2541, #0b132b);">
+                        <div class="brand-icon-wrapper mx-auto mb-2" style="width: 48px; height: 48px; font-size: 1.4rem;">
+                            <i class="fa-solid fa-graduation-cap"></i>
+                        </div>
+                        <h4 class="fw-bold mb-1">Welcome Back</h4>
+                        <p class="small text-muted mb-0">Sign in to your examination dashboard</p>
+                    </div>
+
+                    <div class="card-body p-4">
+                        <!-- Quick Demo Login Presets -->
+                        <div class="p-3 bg-light rounded-3 mb-4 border">
+                            <div class="small fw-bold text-uppercase text-secondary mb-2 text-center">
+                                <i class="fa-solid fa-bolt text-warning me-1"></i> Quick One-Click Demo Logins
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary flex-grow-1 font-weight-bold" onclick="fillDemo('student@platform.com', 'student123')">
+                                    <i class="fa-solid fa-user-graduate me-1"></i> Student Demo
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger flex-grow-1 font-weight-bold" onclick="fillDemo('teacher@platform.com', 'teacher123')">
+                                    <i class="fa-solid fa-chalkboard-user me-1"></i> Teacher Demo
+                                </button>
+                            </div>
+                        </div>
+
+                        <form method="POST" action="{{ url_for('login') }}">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-dark">Email Address</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="fa-solid fa-envelope text-muted"></i></span>
+                                    <input type="email" id="loginEmail" name="email" class="form-control py-2" placeholder="name@institution.com" required>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <label class="form-label fw-bold text-dark">Password</label>
+                                    <a href="#" class="small text-primary">Forgot?</a>
+                                </div>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="fa-solid fa-lock text-muted"></i></span>
+                                    <input type="password" id="loginPassword" name="password" class="form-control py-2" placeholder="••••••••" required>
+                                </div>
+                            </div>
+
+                            <div class="mb-4 form-check">
+                                <input type="checkbox" class="form-check-input" id="rememberMe" name="remember">
+                                <label class="form-check-label small text-muted" for="rememberMe">Remember me on this browser</label>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary-gradient w-100 py-3 fw-bold fs-6">
+                                SIGN IN TO ACCOUNT <i class="fa-solid fa-right-to-bracket ms-2"></i>
+                            </button>
+                        </form>
+
+                        <div class="text-center mt-4 pt-3 border-top">
+                            <span class="small text-muted">Don't have an account?</span>
+                            <a href="{{ url_for('register') }}" class="small fw-bold text-primary ms-1">Register Now</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function fillDemo(email, password) {
+        document.getElementById('loginEmail').value = email;
+        document.getElementById('loginPassword').value = password;
+        if (window.showToast) window.showToast(`Pre-filled credentials for ${email}`, 'success');
+    }
+</script>
+{% endblock %}
