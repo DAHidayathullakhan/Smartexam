@@ -32,14 +32,24 @@ from database import (
 )
 
 # Load environment variables from .env file
-load_dotenv()
+import mimetypes
+
+# Ensure proper MIME types for static assets
+mimetypes.add_type('text/css', '.css')
+mimetypes.add_type('application/javascript', '.js')
+mimetypes.add_type('image/svg+xml', '.svg')
+mimetypes.add_type('image/png', '.png')
+mimetypes.add_type('image/jpeg', '.jpg')
 
 app = Flask(__name__, template_folder='templates', static_folder='static', static_url_path='/static')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'edtech_super_secret_production_key_2026_antigravity')
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
-    return send_from_directory(os.path.join(app.root_path, 'static'), filename)
+    static_dir = os.path.join(app.root_path, 'static')
+    mime_type, _ = mimetypes.guess_type(filename)
+    return send_from_directory(static_dir, filename, mimetype=mime_type or 'text/plain')
+
 
 
 
