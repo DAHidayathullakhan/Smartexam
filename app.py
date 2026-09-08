@@ -34,12 +34,13 @@ from database import (
 # Load environment variables from .env file
 load_dotenv()
 
-app = Flask(__name__, static_folder='static', static_url_path='/static')
+app = Flask(__name__, template_folder='templates', static_folder='static', static_url_path='/static')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'edtech_super_secret_production_key_2026_antigravity')
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     return send_from_directory(os.path.join(app.root_path, 'static'), filename)
+
 
 
 # -----------------------------------------------------------------------------
