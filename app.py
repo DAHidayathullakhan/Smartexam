@@ -6,7 +6,7 @@ import socket
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import (
-    Flask, render_template, request, redirect, url_for, flash, session, jsonify, abort
+    Flask, render_template, request, redirect, url_for, flash, session, jsonify, abort, send_from_directory
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
@@ -34,8 +34,13 @@ from database import (
 # Load environment variables from .env file
 load_dotenv()
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'edtech_super_secret_production_key_2026_antigravity')
+
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    return send_from_directory(os.path.join(app.root_path, 'static'), filename)
+
 
 # -----------------------------------------------------------------------------
 # MONGO HELPERS & MODEL WRAPPERS
