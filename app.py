@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 # Import MongoDB connection & collections module
 import database as db_module
 from database import (
+    db,
     teachers as db_teachers,
     students as db_students,
     subjects as db_subjects,
