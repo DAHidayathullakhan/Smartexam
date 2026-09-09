@@ -213,6 +213,7 @@ class WebRTCManager {
 
         if (this.localStream) {
             this.localStream.getTracks().forEach(track => {
+                console.log(`[WebRTC] Adding local track (${track.kind}) to PeerConnection for User ${targetUserId}`);
                 pc.addTrack(track, this.localStream);
             });
         }
@@ -238,6 +239,7 @@ class WebRTCManager {
 
         pc.onicecandidate = (event) => {
             if (event.candidate) {
+                console.log(`[WebRTC] Sending ICE Candidate to User ${targetUserId}`);
                 this.sendSignaling(classId, targetUserId, 'candidate', event.candidate);
             }
         };
@@ -257,7 +259,7 @@ class WebRTCManager {
 
             if (remoteVideo) {
                 remoteVideo.srcObject = peerObj.remoteStream;
-                remoteVideo.muted = false;
+                remoteVideo.muted = false; // Remote audio must be audible!
                 remoteVideo.setAttribute('autoplay', '');
                 remoteVideo.setAttribute('playsinline', '');
                 remoteVideo.setAttribute('webkit-playsinline', '');
@@ -274,6 +276,7 @@ class WebRTCManager {
             try {
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
+                console.log(`[WebRTC] Sending SDP Offer to User ${targetUserId}`);
                 this.sendSignaling(classId, targetUserId, 'offer', offer);
             } catch (e) {
                 console.error('[WebRTC] Offer creation error:', e);
@@ -281,6 +284,10 @@ class WebRTCManager {
         }
 
         return peerObj;
+    }
+
+    async handleSignalingData(classId, senderUserId, type, data, remoteVideoElemId = null) {
+        return this.handleSignaling(classId, senderUserId, type, data, remoteVideoElemId);
     }
 
     /**
@@ -295,18 +302,24 @@ class WebRTCManager {
         const pc = peerObj.pc;
 
         try {
+            let parsedData = data;
+            if (typeof data === 'string') {
+                try { parsedData = JSON.parse(data); } catch(e) {}
+            }
+
             if (type === 'offer') {
                 console.log(`[WebRTC] Received SDP Offer from User ${senderUserId}`);
-                await pc.setRemoteDescription(new RTCSessionDescription(data));
+                await pc.setRemoteDescription(new RTCSessionDescription(parsedData));
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
+                console.log(`[WebRTC] Sending SDP Answer to User ${senderUserId}`);
                 this.sendSignaling(classId, senderUserId, 'answer', answer);
             } else if (type === 'answer') {
                 console.log(`[WebRTC] Received SDP Answer from User ${senderUserId}`);
-                await pc.setRemoteDescription(new RTCSessionDescription(data));
+                await pc.setRemoteDescription(new RTCSessionDescription(parsedData));
             } else if (type === 'candidate') {
                 console.log(`[WebRTC] Received ICE Candidate from User ${senderUserId}`);
-                await pc.addIceCandidate(new RTCIceCandidate(data));
+                await pc.addIceCandidate(new RTCIceCandidate(parsedData));
             }
         } catch (e) {
             console.error(`[WebRTC] Signaling handling error (${type}):`, e);
@@ -324,8 +337,11 @@ class WebRTCManager {
                 body: JSON.stringify({
                     class_id: classId,
                     target_user_id: targetUserId,
+                    to_user_id: targetUserId,
+                    action: signalType,
                     signal_type: signalType,
-                    payload: payload
+                    payload: payload,
+                    data: payload
                 })
             });
         } catch (e) {

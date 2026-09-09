@@ -908,7 +908,9 @@ def live_classroom(class_id):
                            local_ip=local_ip,
                            local_url=local_url)
 
-@app.route('/api/live-class/<int:class_id>/status')
+@app.route('/api/live-class/<int:class_id>/status', methods=['GET'])
+@app.route('/api/live-class/<int:class_id>/state', methods=['GET'])
+@app.route('/api/live-class/state/<int:class_id>', methods=['GET'])
 def live_class_status_api(class_id):
     cls_data = db_live_classes.find_one({'id': class_id})
     if not cls_data:
@@ -979,10 +981,16 @@ def live_class_status_api(class_id):
     })
 
 @app.route('/api/live-class/<int:class_id>/update-status', methods=['POST'])
+@app.route('/api/live-class/status', methods=['POST'])
+@app.route('/api/live-class/chat', methods=['POST'])
 @login_required
-def live_class_update_status_api(class_id):
+def live_class_update_status_api(class_id=None):
     data = request.get_json() or {}
     user = get_current_user()
+
+    if not class_id:
+        class_id = data.get('class_id')
+    class_id = int(class_id) if class_id else 1
 
     camera_status = data.get('camera_status')
     mic_status = data.get('microphone_status')
@@ -1033,13 +1041,14 @@ def live_class_update_status_api(class_id):
 # WEBRTC SIGNALING ENDPOINTS
 # -----------------------------------------------------------------------------
 
+@app.route('/api/webrtc/signal', methods=['GET', 'POST'])
 @app.route('/api/webrtc/signaling', methods=['GET', 'POST'])
 @login_required
 def webrtc_signaling():
     user = get_current_user()
     if request.method == 'POST':
         data = request.get_json() or {}
-        action = data.get('action')
+        action = data.get('action') or data.get('signal_type')
         class_id = data.get('class_id')
         to_user_id = data.get('to_user_id') or data.get('target_user_id')
         payload = data.get('data') or data.get('payload') or data
@@ -1051,7 +1060,8 @@ def webrtc_signaling():
             'from_user_id': user.id,
             'to_user_id': int(to_user_id) if to_user_id else None,
             'action': action,
-            'payload': json.dumps(payload),
+            'signal_type': action,
+            'payload': json.dumps(payload) if isinstance(payload, (dict, list)) else str(payload),
             'timestamp': datetime.utcnow()
         }
         db_webrtc_signals.insert_one(sig_doc)
@@ -1067,11 +1077,13 @@ def webrtc_signaling():
                         'id': s.get('id'),
                         'from_user_id': s.get('from_user_id'),
                         'to_user_id': s.get('to_user_id'),
-                        'action': s.get('action'),
+                        'action': s.get('action') or s.get('signal_type'),
+                        'signal_type': s.get('action') or s.get('signal_type'),
                         'payload': s.get('payload'),
                         'timestamp': s.get('timestamp').strftime('%H:%M:%S') if isinstance(s.get('timestamp'), datetime) else ''
                     })
         return jsonify({'success': True, 'signals': my_signals})
+
 
 @app.route('/viewboard')
 def viewboard():

@@ -727,7 +727,11 @@
                         const act = sig.action || sig.type || (sig.offer ? 'offer' : (sig.answer ? 'answer' : 'candidate'));
                         const payload = sig.data || sig.offer || sig.answer || sig.candidates;
                         if (act && payload && sig.from_user_id !== currentUserId) {
-                            await window.WebRTCManager.handleSignalingData(classId, sig.from_user_id, act, payload);
+                            if (window.webrtc) {
+                                await window.webrtc.handleSignaling(classId, sig.from_user_id, act, payload);
+                            } else if (window.WebRTCManager) {
+                                await window.WebRTCManager.handleSignaling(classId, sig.from_user_id, act, payload);
+                            }
                         }
                     }
                 }
