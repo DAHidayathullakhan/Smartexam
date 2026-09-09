@@ -466,20 +466,48 @@
     let screenSharing = false;
     let handRaised = false;
 
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
         checkMobileInsecureContext();
         setupClassroomControls();
         startClassStatePolling();
         startSignalingPolling();
         if (!isTeacher) startStudentRequestPolling();
 
-        // Auto-initialize peer connections for existing participant cards
+        // Auto-initialize local camera & microphone media on entry if available
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            try {
+                const stream = await window.webrtc.initLocalMedia(`video_user_${currentUserId}`, handleSpeakingStateChange);
+                if (stream) {
+                    camOn = true;
+                    micOn = true;
+                    const myVideo = document.getElementById(`video_user_${currentUserId}`);
+                    const myAvatar = document.getElementById(`avatar_user_${currentUserId}`);
+                    if (myVideo) myVideo.style.display = 'block';
+                    if (myAvatar) myAvatar.style.display = 'none';
+
+                    const camBtn = document.getElementById('btnToggleCam');
+                    if (camBtn) {
+                        camBtn.className = 'btn btn-success px-3 py-2 fw-bold text-white';
+                        camBtn.innerHTML = '<i class="fa-solid fa-video me-1"></i> 🟢 CAMERA ON';
+                    }
+                    const micBtn = document.getElementById('btnToggleMic');
+                    if (micBtn) {
+                        micBtn.className = 'btn btn-success px-3 py-2 fw-bold text-white';
+                        micBtn.innerHTML = '<i class="fa-solid fa-microphone me-1"></i> 🟢 MIC ON';
+                    }
+                }
+            } catch (e) {
+                console.warn('[Classroom]: Auto media request warning:', e);
+            }
+        }
+
+        // Auto-initialize WebRTC peer connections for existing participant cards
         const participantCards = document.querySelectorAll('.participant-grid-card');
         participantCards.forEach(p => {
             const idStr = p.id.replace('card_user_', '');
             const targetId = parseInt(idStr);
             if (targetId && targetId !== currentUserId) {
-                window.WebRTCManager.connectToPeer(targetId, classId, null, isTeacher);
+                window.webrtc.connectToPeer(targetId, classId, null, true);
             }
         });
     });
@@ -515,9 +543,9 @@
             const myAvatar = document.getElementById(`avatar_user_${currentUserId}`);
 
             if (camOn) {
-                const stream = await window.WebRTCManager.initLocalMedia(`video_user_${currentUserId}`, handleSpeakingStateChange);
+                const stream = await window.webrtc.initLocalMedia(`video_user_${currentUserId}`, handleSpeakingStateChange);
                 if (stream) {
-                    window.WebRTCManager.toggleCamera(true);
+                    window.webrtc.toggleCamera(true);
                     if (myVideo) myVideo.style.display = 'block';
                     if (myAvatar) myAvatar.style.display = 'none';
 
@@ -530,12 +558,12 @@
                         const idStr = p.id.replace('card_user_', '');
                         const targetId = parseInt(idStr);
                         if (targetId && targetId !== currentUserId) {
-                            window.WebRTCManager.connectToPeer(targetId, classId, null, true);
+                            window.webrtc.connectToPeer(targetId, classId, null, true);
                         }
                     });
                 }
             } else {
-                window.WebRTCManager.toggleCamera(false);
+                window.webrtc.toggleCamera(false);
                 if (myVideo) myVideo.style.display = 'none';
                 if (myAvatar) myAvatar.style.display = 'flex';
 
