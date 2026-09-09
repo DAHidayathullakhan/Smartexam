@@ -197,8 +197,21 @@ class WebRTCManager {
     /**
      * STEP 2, 3, 5, 6, 7: RTCPeerConnection Setup & Media Track Binding
      */
+    /**
+     * STEP 2, 3, 5, 6, 7: RTCPeerConnection Setup & Media Track Binding
+     */
     async connectToPeer(targetUserId, classId, remoteVideoElemId = null, isInitiator = false) {
         if (this.peers[targetUserId]) {
+            // Ensure local tracks are attached if localStream became available after peer creation
+            const existingPc = this.peers[targetUserId].pc;
+            if (this.localStream && existingPc) {
+                const senders = existingPc.getSenders();
+                this.localStream.getTracks().forEach(track => {
+                    if (!senders.some(s => s.track && s.track.kind === track.kind)) {
+                        try { existingPc.addTrack(track, this.localStream); } catch(e) {}
+                    }
+                });
+            }
             return this.peers[targetUserId];
         }
 
@@ -213,16 +226,17 @@ class WebRTCManager {
         this.peers[targetUserId] = peerObj;
 
         // STEP 3: Track Sending - Attach local tracks to RTCPeerConnection
-        if (this.localStream) {
-            this.localStream.getTracks().forEach(track => {
+        const streamToSend = this.localStream || window.localStream;
+        if (streamToSend) {
+            streamToSend.getTracks().forEach(track => {
                 console.log(`[WebRTC STEP 3 - TRACK SENDING]: Adding local track (${track.kind}) to Peer #${targetUserId}`);
-                pc.addTrack(track, this.localStream);
+                try { pc.addTrack(track, streamToSend); } catch(e) {}
             });
         }
 
         pc.onconnectionstatechange = () => {
             console.log(`[WebRTC STEP 2 STATE]: Peer #${targetUserId} connectionState: ${pc.connectionState}`);
-            this.debugState.peerState = pc.connectionState.toUpperCase();
+            this.debugState.peerState = pc.connectionState.toUpperCase() === 'CONNECTED' ? 'CONNECTED 🟢' : pc.connectionState.toUpperCase();
             this.updateDebugPanel();
 
             if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
@@ -235,11 +249,11 @@ class WebRTCManager {
 
         pc.oniceconnectionstatechange = () => {
             console.log(`[WebRTC STEP 6 ICE STATE]: Peer #${targetUserId} iceConnectionState: ${pc.iceConnectionState}`);
-            this.debugState.iceState = pc.iceConnectionState.toUpperCase();
+            this.debugState.iceState = pc.iceConnectionState.toUpperCase() === 'CONNECTED' || pc.iceConnectionState.toUpperCase() === 'COMPLETED' ? 'CONNECTED 🟢' : pc.iceConnectionState.toUpperCase();
             this.updateDebugPanel();
         };
 
-        // STEP 6: ICE Candidates Candidate Generation
+        // STEP 6: ICE Candidates Generation
         pc.onicecandidate = (event) => {
             if (event.candidate) {
                 console.log(`[WebRTC STEP 6 - ICE GENERATED]: Sending ICE candidate to Peer #${targetUserId}`, event.candidate);
@@ -264,8 +278,8 @@ class WebRTCManager {
             if (remoteVideo) {
                 remoteVideo.srcObject = peerObj.remoteStream;
                 // STEP 8: REMOTE AUDIO MUST BE AUDIBLE (muted = false!)
-                remoteVideo.muted = false; 
-                // STEP 9: Mobile Browser Attributes
+                remoteVideo.muted = false;
+                // STEP 9 & 10: Android Chrome Mobile Browser Attributes
                 remoteVideo.setAttribute('autoplay', '');
                 remoteVideo.setAttribute('playsinline', '');
                 remoteVideo.setAttribute('webkit-playsinline', '');
@@ -274,16 +288,28 @@ class WebRTCManager {
 
                 console.log(`[WebRTC STEP 7 & 8 SUCCESS]: Bound remote MediaStream (Audio+Video) to #${targetVideoId}. Muted: false`);
 
-                try {
-                    remoteVideo.play().catch(e => console.warn(`[WebRTC STEP 7 & 8 WARNING]: Autoplay error for #${targetVideoId}:`, e));
-                } catch (e) {}
+                // Android Chrome Autoplay Promise Catch Handler & User Touch Interaction Unblocker
+                const playPromise = remoteVideo.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(err => {
+                        console.warn(`[WebRTC Android Autoplay Warning]: Remote playback pending user interaction for #${targetVideoId}:`, err);
+                        const enableAudioTouch = () => {
+                            remoteVideo.play().catch(e => {});
+                            document.removeEventListener('touchstart', enableAudioTouch);
+                            document.removeEventListener('click', enableAudioTouch);
+                        };
+                        document.addEventListener('touchstart', enableAudioTouch, { once: true });
+                        document.addEventListener('click', enableAudioTouch, { once: true });
+                    });
+                }
             }
         };
 
         // STEP 5: SDP Offer Generation
         if (isInitiator) {
             try {
-                const offer = await pc.createOffer();
+                const offerOptions = { offerToReceiveAudio: true, offerToReceiveVideo: true };
+                const offer = await pc.createOffer(offerOptions);
                 await pc.setLocalDescription(offer);
                 console.log(`[WebRTC STEP 5 - SDP OFFER GENERATED]: Sending offer to Peer #${targetUserId}`, offer);
                 this.sendSignaling(classId, targetUserId, 'offer', offer);
@@ -328,7 +354,8 @@ class WebRTCManager {
                     peerObj.iceCandidatesQueue = [];
                 }
 
-                const answer = await pc.createAnswer();
+                const answerOptions = { offerToReceiveAudio: true, offerToReceiveVideo: true };
+                const answer = await pc.createAnswer(answerOptions);
                 await pc.setLocalDescription(answer);
                 console.log(`[WebRTC STEP 5 - SDP ANSWER GENERATED]: Sending answer to Peer #${senderUserId}`, answer);
                 this.sendSignaling(classId, senderUserId, 'answer', answer);
