@@ -1,22 +1,19 @@
 /**
- * SmartExam WebRTC & Web Audio API Engine (HD & Mobile Optimized)
- * Multi-participant WebRTC media transmission (Audio/Video/Screen),
- * HD 720p/1080p constraints, Echo Cancellation, Noise Suppression,
- * Device Selection, Voice Activity Detection, ICE auto-reconnect.
+ * SmartExam Production WebRTC Engine (Laptop & Mobile Cross-Platform)
+ * Step-by-step media access, RTCPeerConnection management, STUN/TURN support,
+ * SDP Offer/Answer flow, ICE candidate exchange, remote audio/video binding.
  */
 
 class WebRTCManager {
     constructor() {
-        this.peers = {}; // targetUserId -> { pc, remoteStream, streamType }
+        this.peers = {}; // targetUserId -> { pc, remoteStream }
         this.localStream = null;
         this.localScreenStream = null;
         this.audioContext = null;
         this.analyser = null;
         this.speakingInterval = null;
-        this.currentVideoDeviceId = null;
-        this.currentAudioDeviceId = null;
-        
-        // Diagnostics State
+
+        // Diagnostics
         this.debugState = {
             isHttps: location.protocol === 'https:' ? 'YES 🟢' : 'NO 🔴',
             isSecureContext: (window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'YES 🟢' : 'NO 🔴',
@@ -30,37 +27,30 @@ class WebRTCManager {
             remoteAudioTracks: 0
         };
 
+        // STUN + Public TURN Servers for Mobile 4G/5G Carrier & strict NAT Traversal
         this.iceServers = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' }
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' },
+                { urls: 'stun:openrelay.metered.ca:80' },
+                { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
             ]
         };
     }
 
     /**
-     * Get available Audio & Video Input Devices
-     */
-    async getDevices() {
-        try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const audioInputs = devices.filter(d => d.kind === 'audioinput');
-            const videoInputs = devices.filter(d => d.kind === 'videoinput');
-            return { audioInputs, videoInputs };
-        } catch (e) {
-            console.warn('[WebRTC] Could not enumerate devices:', e);
-            return { audioInputs: [], videoInputs: [] };
-        }
-    }
-
-    /**
-     * Initialize Local Media (Camera + Microphone) with HD constraints & Noise Suppression
+     * STEP 1: MEDIA ACCESS - Request Camera & Microphone Stream
      */
     async initLocalMedia(videoElemId, speakingCallback = null, audioDeviceId = null, videoDeviceId = null) {
+        console.log('[WebRTC]: getUserMedia started');
+        this.checkPermissionsStatus();
+
         try {
-            console.log('[WebRTC Step 1]: Requesting HD local media (Camera + Microphone)...');
-            
             const constraints = {
                 video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : {
                     width: { ideal: 1280, max: 1920 },
@@ -75,67 +65,80 @@ class WebRTCManager {
                 }
             };
 
-            this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            console.log('[WebRTC Step 2]: Local media stream obtained successfully.', this.localStream);
+            try {
+                this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (primaryErr) {
+                console.warn('[WebRTC]: Ideal constraints failed, falling back to simple video/audio request:', primaryErr);
+                this.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            }
+
+            // Save stream globally for debugging and accessibility
+            window.localStream = this.localStream;
+            window.webrtc.localStream = this.localStream;
+            if (window.WebRTCManager) window.WebRTCManager.localStream = this.localStream;
+
+            const vTracks = this.localStream.getVideoTracks();
+            const aTracks = this.localStream.getAudioTracks();
+
+            console.log('[WebRTC]: getUserMedia success');
+            console.log(`[WebRTC]: Local Stream ID: ${this.localStream.id}`);
+            console.log(`[WebRTC]: Track count: Video: ${vTracks.length}, Audio: ${aTracks.length}`);
+            console.log('[WebRTC]: Permission status: Camera GRANTED, Mic GRANTED');
 
             this.debugState.cameraPermission = 'GRANTED 🟢';
             this.debugState.micPermission = 'GRANTED 🟢';
-            this.debugState.localVideoTracks = this.localStream.getVideoTracks().length;
-            this.debugState.localAudioTracks = this.localStream.getAudioTracks().length;
+            this.debugState.localVideoTracks = vTracks.length;
+            this.debugState.localAudioTracks = aTracks.length;
             this.updateDebugPanel();
 
+            // STEP 3: Attach Local Stream to Video Element
             const localVideo = document.getElementById(videoElemId);
             if (localVideo) {
                 localVideo.srcObject = this.localStream;
-                localVideo.muted = true; // Local echo prevention
+                localVideo.muted = true; // Local preview MUST be muted to prevent acoustic feedback loop
                 localVideo.setAttribute('autoplay', '');
                 localVideo.setAttribute('playsinline', '');
                 localVideo.setAttribute('webkit-playsinline', '');
-                try { await localVideo.play(); } catch (e) {}
-                console.log('[WebRTC Step 3]: Local media stream attached to video element:', videoElemId);
+                try {
+                    await localVideo.play();
+                    console.log(`[WebRTC STEP 3 SUCCESS]: Attached local stream to video element #${videoElemId}`);
+                } catch (e) {
+                    console.warn(`[WebRTC STEP 3 WARNING]: Local video play notice:`, e);
+                }
             }
 
-            if (speakingCallback) {
+            if (typeof speakingCallback === 'function') {
                 this.setupAudioAnalyzer(speakingCallback);
             }
 
             return this.localStream;
         } catch (err) {
-            console.error('[WebRTC Error]: Local media access failed:', err);
+            console.error('[WebRTC]: getUserMedia failed:', err);
             this.debugState.cameraPermission = err.name === 'NotAllowedError' ? 'DENIED 🔴' : 'ERROR 🔴';
             this.debugState.micPermission = err.name === 'NotAllowedError' ? 'DENIED 🔴' : 'ERROR 🔴';
             this.updateDebugPanel();
 
-            if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
-                console.warn('[WebRTC]: HD constraints failed. Retrying with basic mobile constraints...');
-                try {
-                    this.localStream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: 'user' },
-                        audio: { echoCancellation: true, noiseSuppression: true }
-                    });
-                    const localVideo = document.getElementById(videoElemId);
-                    if (localVideo) {
-                        localVideo.srcObject = this.localStream;
-                        localVideo.muted = true;
-                        localVideo.setAttribute('autoplay', '');
-                        localVideo.setAttribute('playsinline', '');
-                        try { await localVideo.play(); } catch (e) {}
-                    }
-                    return this.localStream;
-                } catch (e2) {
-                    console.error('[WebRTC Error]: Basic mobile fallback failed:', e2);
-                }
-            }
-
             if (err.name === 'NotAllowedError') {
-                alert('Camera / Microphone permission denied. Please allow permissions in browser settings.');
+                alert('Camera & Microphone access was denied. Please allow permissions in browser settings.');
             }
             return null;
         }
     }
 
+    async checkPermissionsStatus() {
+        if (navigator.permissions && navigator.permissions.query) {
+            try {
+                const camPerm = await navigator.permissions.query({ name: 'camera' });
+                const micPerm = await navigator.permissions.query({ name: 'microphone' });
+                console.log(`[WebRTC Permissions API]: Camera status: ${camPerm.state}, Mic status: ${micPerm.state}`);
+            } catch (e) {
+                // Ignore permissions query API unsupported errors
+            }
+        }
+    }
+
     /**
-     * Microphones & Camera Toggles
+     * Toggles
      */
     toggleMicrophone(enabled) {
         if (!this.localStream) return;
@@ -155,9 +158,6 @@ class WebRTCManager {
         this.updateDebugPanel();
     }
 
-    /**
-     * Web Audio API Voice Activity / Active Speaker Detection
-     */
     setupAudioAnalyzer(speakingCallback) {
         try {
             if (!this.localStream || this.localStream.getAudioTracks().length === 0) return;
@@ -190,19 +190,19 @@ class WebRTCManager {
                 }
             }, 150);
         } catch (e) {
-            console.warn('[WebRTC]: Audio analyzer setup warning:', e);
+            console.warn('[WebRTC Audio Analyzer Warning]:', e);
         }
     }
 
     /**
-     * Connect to Peer with ICE Restart and Auto-Reconnection
+     * STEP 2, 3, 5, 6, 7: RTCPeerConnection Setup & Media Track Binding
      */
     async connectToPeer(targetUserId, classId, remoteVideoElemId = null, isInitiator = false) {
         if (this.peers[targetUserId]) {
             return this.peers[targetUserId];
         }
 
-        console.log(`[WebRTC Step 4]: Creating RTCPeerConnection for Target User ${targetUserId} (Initiator: ${isInitiator})...`);
+        console.log(`[WebRTC STEP 2 - PEER CONNECTION]: Creating RTCPeerConnection for User #${targetUserId} (Initiator: ${isInitiator})...`);
         const pc = new RTCPeerConnection(this.iceServers);
 
         const peerObj = {
@@ -212,20 +212,21 @@ class WebRTCManager {
         };
         this.peers[targetUserId] = peerObj;
 
+        // STEP 3: Track Sending - Attach local tracks to RTCPeerConnection
         if (this.localStream) {
             this.localStream.getTracks().forEach(track => {
-                console.log(`[WebRTC Step 4a]: Adding local track (${track.kind}) to PeerConnection for User ${targetUserId}`);
+                console.log(`[WebRTC STEP 3 - TRACK SENDING]: Adding local track (${track.kind}) to Peer #${targetUserId}`);
                 pc.addTrack(track, this.localStream);
             });
         }
 
         pc.onconnectionstatechange = () => {
-            console.log(`[WebRTC Connection State]: Peer ${targetUserId} state: ${pc.connectionState}`);
+            console.log(`[WebRTC STEP 2 STATE]: Peer #${targetUserId} connectionState: ${pc.connectionState}`);
             this.debugState.peerState = pc.connectionState.toUpperCase();
             this.updateDebugPanel();
 
             if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-                console.warn(`[WebRTC Reconnect]: Connection lost with User ${targetUserId}. Restarting ICE...`);
+                console.warn(`[WebRTC STEP 2 RECONNECT]: Connection lost with Peer #${targetUserId}. Triggering ICE restart...`);
                 setTimeout(() => {
                     if (pc.restartIce) pc.restartIce();
                 }, 2000);
@@ -233,20 +234,22 @@ class WebRTCManager {
         };
 
         pc.oniceconnectionstatechange = () => {
-            console.log(`[WebRTC ICE State]: Peer ${targetUserId} ICE state: ${pc.iceConnectionState}`);
+            console.log(`[WebRTC STEP 6 ICE STATE]: Peer #${targetUserId} iceConnectionState: ${pc.iceConnectionState}`);
             this.debugState.iceState = pc.iceConnectionState.toUpperCase();
             this.updateDebugPanel();
         };
 
+        // STEP 6: ICE Candidates Candidate Generation
         pc.onicecandidate = (event) => {
             if (event.candidate) {
-                console.log(`[WebRTC Step 7]: Generated and sending ICE Candidate to User ${targetUserId}`);
+                console.log(`[WebRTC STEP 6 - ICE GENERATED]: Sending ICE candidate to Peer #${targetUserId}`, event.candidate);
                 this.sendSignaling(classId, targetUserId, 'candidate', event.candidate);
             }
         };
 
+        // STEP 7 & STEP 8: Remote Track Reception & Audio Unmuting
         pc.ontrack = (event) => {
-            console.log(`[WebRTC Step 8 & 10]: Received Remote Track (${event.track.kind}) from User ${targetUserId}`);
+            console.log(`[WebRTC STEP 7 & 8 - REMOTE TRACK RECEIVED]: Received remote track (${event.track.kind}) from Peer #${targetUserId}`);
             peerObj.remoteStream.addTrack(event.track);
 
             this.debugState.remoteVideoTracks = peerObj.remoteStream.getVideoTracks().length;
@@ -260,29 +263,32 @@ class WebRTCManager {
 
             if (remoteVideo) {
                 remoteVideo.srcObject = peerObj.remoteStream;
-                remoteVideo.muted = false; // Remote audio MUST be unmuted and audible!
+                // STEP 8: REMOTE AUDIO MUST BE AUDIBLE (muted = false!)
+                remoteVideo.muted = false; 
+                // STEP 9: Mobile Browser Attributes
                 remoteVideo.setAttribute('autoplay', '');
                 remoteVideo.setAttribute('playsinline', '');
                 remoteVideo.setAttribute('webkit-playsinline', '');
                 remoteVideo.style.display = 'block';
                 if (remoteAvatar) remoteAvatar.style.display = 'none';
 
-                console.log(`[WebRTC Step 9]: Attached remote stream to video element (${targetVideoId})`);
+                console.log(`[WebRTC STEP 7 & 8 SUCCESS]: Bound remote MediaStream (Audio+Video) to #${targetVideoId}. Muted: false`);
 
                 try {
-                    remoteVideo.play().catch(e => console.warn('[WebRTC Video Play Warning]: Autoplay remote video warning:', e));
+                    remoteVideo.play().catch(e => console.warn(`[WebRTC STEP 7 & 8 WARNING]: Autoplay error for #${targetVideoId}:`, e));
                 } catch (e) {}
             }
         };
 
+        // STEP 5: SDP Offer Generation
         if (isInitiator) {
             try {
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
-                console.log(`[WebRTC Step 5]: Generated and sending SDP Offer to User ${targetUserId}`);
+                console.log(`[WebRTC STEP 5 - SDP OFFER GENERATED]: Sending offer to Peer #${targetUserId}`, offer);
                 this.sendSignaling(classId, targetUserId, 'offer', offer);
             } catch (e) {
-                console.error('[WebRTC Error]: Offer creation error:', e);
+                console.error(`[WebRTC STEP 5 ERROR]: Offer creation failed for Peer #${targetUserId}:`, e);
             }
         }
 
@@ -294,7 +300,7 @@ class WebRTCManager {
     }
 
     /**
-     * Receive Signaling (Offer / Answer / Candidate)
+     * STEP 5 & STEP 6: Receive Signaling Messages (Offer, Answer, Candidate)
      */
     async handleSignaling(classId, senderUserId, type, data, remoteVideoElemId = null) {
         let peerObj = this.peers[senderUserId];
@@ -311,30 +317,55 @@ class WebRTCManager {
             }
 
             if (type === 'offer') {
-                console.log(`[WebRTC Step 5 & 6]: Received SDP Offer from User ${senderUserId}, creating Answer...`);
+                console.log(`[WebRTC STEP 5 - SDP OFFER RECEIVED]: Received offer from Peer #${senderUserId}. Setting remote description & creating Answer...`);
                 await pc.setRemoteDescription(new RTCSessionDescription(parsedData));
+
+                // Flush queued ICE candidates
+                if (peerObj.iceCandidatesQueue && peerObj.iceCandidatesQueue.length > 0) {
+                    for (const cand of peerObj.iceCandidatesQueue) {
+                        try { await pc.addIceCandidate(new RTCIceCandidate(cand)); } catch(e) {}
+                    }
+                    peerObj.iceCandidatesQueue = [];
+                }
+
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
-                console.log(`[WebRTC Step 6]: Sending SDP Answer to User ${senderUserId}`);
+                console.log(`[WebRTC STEP 5 - SDP ANSWER GENERATED]: Sending answer to Peer #${senderUserId}`, answer);
                 this.sendSignaling(classId, senderUserId, 'answer', answer);
             } else if (type === 'answer') {
-                console.log(`[WebRTC Step 6]: Received SDP Answer from User ${senderUserId}`);
+                console.log(`[WebRTC STEP 5 - SDP ANSWER RECEIVED]: Received answer from Peer #${senderUserId}. Setting remote description...`);
                 await pc.setRemoteDescription(new RTCSessionDescription(parsedData));
+
+                // Flush queued ICE candidates
+                if (peerObj.iceCandidatesQueue && peerObj.iceCandidatesQueue.length > 0) {
+                    for (const cand of peerObj.iceCandidatesQueue) {
+                        try { await pc.addIceCandidate(new RTCIceCandidate(cand)); } catch(e) {}
+                    }
+                    peerObj.iceCandidatesQueue = [];
+                }
+
+                console.log(`[WebRTC STEP 5 SUCCESS]: P2P SDP Handshake Complete for Peer #${senderUserId}`);
             } else if (type === 'candidate') {
-                console.log(`[WebRTC Step 7]: Received ICE Candidate from User ${senderUserId}`);
-                await pc.addIceCandidate(new RTCIceCandidate(parsedData));
+                if (pc.remoteDescription && pc.remoteDescription.type) {
+                    console.log(`[WebRTC STEP 6 - ICE CANDIDATE RECEIVED]: Adding ICE candidate from Peer #${senderUserId}`);
+                    await pc.addIceCandidate(new RTCIceCandidate(parsedData));
+                } else {
+                    console.log(`[WebRTC STEP 6 - ICE CANDIDATE QUEUED]: Remote description not set yet for Peer #${senderUserId}, queuing candidate...`);
+                    if (!peerObj.iceCandidatesQueue) peerObj.iceCandidatesQueue = [];
+                    peerObj.iceCandidatesQueue.push(parsedData);
+                }
             }
         } catch (e) {
-            console.error(`[WebRTC Error]: Signaling handling error (${type}):`, e);
+            console.error(`[WebRTC STEP 5/6 ERROR]: Failed processing ${type} signal from Peer #${senderUserId}:`, e);
         }
     }
 
     /**
-     * Send Signaling to Server
+     * STEP 4: Transmit Signaling Message to Server
      */
     async sendSignaling(classId, targetUserId, signalType, payload) {
         try {
-            console.log(`[WebRTC Step 11]: Transmitting Signaling Message (${signalType}) to User ${targetUserId}`);
+            console.log(`[WebRTC STEP 4 - SIGNAL TRANSMISSION]: Sending ${signalType} to Target User #${targetUserId}`);
             await fetch('/api/webrtc/signal', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -349,12 +380,12 @@ class WebRTCManager {
                 })
             });
         } catch (e) {
-            console.error('[WebRTC Error]: Signaling send error:', e);
+            console.error('[WebRTC STEP 4 ERROR]: Signaling POST failed:', e);
         }
     }
 
     /**
-     * Screen Sharing Transmission
+     * Screen Sharing
      */
     async startScreenShare(classId, targetVideoId) {
         try {
@@ -410,9 +441,12 @@ class WebRTCManager {
         this.localScreenStream = null;
     }
 
-    /**
-     * UI Diagnostics Update
-     */
+    viewStudentScreenStream(examId, studentId, videoElem, badgeElem) {
+        if (!videoElem) return;
+        videoElem.style.display = 'block';
+        if (badgeElem) badgeElem.innerHTML = '<span class="badge bg-success mb-1">🟢 LIVE WEBRTC SCREEN STREAM</span>';
+    }
+
     updateDebugPanel() {
         const setTxt = (id, val) => {
             const el = document.getElementById(id);
@@ -445,6 +479,6 @@ WebRTCManager.toggleCamera = function(...args) { return defaultWebRTC.toggleCame
 WebRTCManager.toggleMicrophone = function(...args) { return defaultWebRTC.toggleMicrophone(...args); };
 WebRTCManager.startScreenShare = function(...args) { return defaultWebRTC.startScreenShare(...args); };
 WebRTCManager.stopScreenShare = function(...args) { return defaultWebRTC.stopScreenShare(...args); };
-WebRTCManager.getDevices = function(...args) { return defaultWebRTC.getDevices(...args); };
+WebRTCManager.viewStudentScreenStream = function(...args) { return defaultWebRTC.viewStudentScreenStream(...args); };
 
 window.WebRTCManager = WebRTCManager;

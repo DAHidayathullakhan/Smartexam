@@ -476,7 +476,8 @@
         // Auto-initialize local camera & microphone media on entry if available
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             try {
-                const stream = await window.webrtc.initLocalMedia(`video_user_${currentUserId}`, handleSpeakingStateChange);
+                const cb = typeof handleSpeakingStateChange === 'function' ? handleSpeakingStateChange : null;
+                const stream = await window.webrtc.initLocalMedia(`video_user_${currentUserId}`, cb);
                 if (stream) {
                     camOn = true;
                     micOn = true;
@@ -543,7 +544,8 @@
             const myAvatar = document.getElementById(`avatar_user_${currentUserId}`);
 
             if (camOn) {
-                const stream = await window.webrtc.initLocalMedia(`video_user_${currentUserId}`, handleSpeakingStateChange);
+                const cb = typeof handleSpeakingStateChange === 'function' ? handleSpeakingStateChange : null;
+                const stream = await window.webrtc.initLocalMedia(`video_user_${currentUserId}`, cb);
                 if (stream) {
                     window.webrtc.toggleCamera(true);
                     if (myVideo) myVideo.style.display = 'block';
@@ -643,21 +645,22 @@
         const btn = document.getElementById('btnToggleMic');
 
         if (micOn) {
-            if (!window.WebRTCManager.localStream) {
-                await window.WebRTCManager.initLocalMedia(`video_user_${currentUserId}`, handleSpeakingStateChange);
+            if (!window.webrtc.localStream && !window.localStream) {
+                const cb = typeof handleSpeakingStateChange === 'function' ? handleSpeakingStateChange : null;
+                await window.webrtc.initLocalMedia(`video_user_${currentUserId}`, cb);
             }
-            window.WebRTCManager.toggleMicrophone(true);
+            window.webrtc.toggleMicrophone(true);
             if (btn) {
                 btn.className = 'btn btn-success px-3 py-2 fw-bold text-white';
                 btn.innerHTML = '<i class="fa-solid fa-microphone me-1"></i> 🟢 MIC ON';
             }
         } else {
-            window.WebRTCManager.toggleMicrophone(false);
+            window.webrtc.toggleMicrophone(false);
             if (btn) {
                 btn.className = 'btn btn-outline-danger px-3 py-2 fw-bold text-white';
                 btn.innerHTML = '<i class="fa-solid fa-microphone-slash me-1"></i> 🔴 MIC OFF';
             }
-            handleSpeakingStateChange(false);
+            if (typeof handleSpeakingStateChange === 'function') handleSpeakingStateChange(false);
         }
         await updateStatusBackend();
     }
@@ -745,6 +748,8 @@
         setInterval(fetchClassState, 2500);
     }
 
+    const processedSignalIds = new Set();
+
     function startSignalingPolling() {
         setInterval(async () => {
             try {
@@ -752,9 +757,21 @@
                 const data = await response.json();
                 if (data.signals && data.signals.length > 0) {
                     for (const sig of data.signals) {
-                        const act = sig.action || sig.type || (sig.offer ? 'offer' : (sig.answer ? 'answer' : 'candidate'));
-                        const payload = sig.data || sig.offer || sig.answer || sig.candidates;
+                        if (sig.id && processedSignalIds.has(sig.id)) {
+                            continue;
+                        }
+
+                        const act = sig.action || sig.signal_type || (sig.offer ? 'offer' : (sig.answer ? 'answer' : 'candidate'));
+                        let payload = sig.payload || sig.data || sig.offer || sig.answer || sig.candidates;
+
+                        if (typeof payload === 'string') {
+                            try { payload = JSON.parse(payload); } catch(e) {}
+                        }
+
                         if (act && payload && sig.from_user_id !== currentUserId) {
+                            console.log(`[WebRTC Signaling Received]: Processing ${act} from User #${sig.from_user_id} (Signal ID: ${sig.id})`);
+                            if (sig.id) processedSignalIds.add(sig.id);
+
                             if (window.webrtc) {
                                 await window.webrtc.handleSignaling(classId, sig.from_user_id, act, payload);
                             } else if (window.WebRTCManager) {
@@ -766,7 +783,7 @@
             } catch (e) {
                 console.error('Signaling poll error:', e);
             }
-        }, 1500);
+        }, 1200);
     }
 
 
