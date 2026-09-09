@@ -578,6 +578,13 @@ def exams():
 
     return render_template('exams.html', exams=exams_list, subjects=subjects_list)
 
+@app.route('/join-exam')
+@app.route('/join_exam')
+@login_required
+def join_exam():
+    return redirect(url_for('exams'))
+
+
 @app.route('/exams/create', methods=['GET', 'POST'])
 @login_required
 @teacher_required

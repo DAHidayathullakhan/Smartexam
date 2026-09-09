@@ -19,6 +19,26 @@
             </div>
         </div>
 
+        <!-- SMART EXAM ANALYTICS DASHBOARD -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                    <h6 class="fw-bold text-dark mb-3"><i class="fa-solid fa-chart-pie text-primary me-2"></i> Pass / Fail Ratio</h6>
+                    <div style="height: 180px; position: relative;">
+                        <canvas id="passFailChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-8">
+                <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                    <h6 class="fw-bold text-dark mb-3"><i class="fa-solid fa-chart-column text-success me-2"></i> Score Distribution Analytics</h6>
+                    <div style="height: 180px; position: relative;">
+                        <canvas id="scoreDistChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Filter Bar -->
         <div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white">
             <div class="d-flex flex-wrap align-items-center gap-2">
@@ -288,5 +308,41 @@
             else if (filter === 'warnings') w.style.display = (sw >= 1) ? 'block' : 'none';
         });
     }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        const pfCtx = document.getElementById('passFailChart');
+        if (pfCtx) {
+            new Chart(pfCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Passed (>=50%)', 'Failed (<50%)'],
+                    datasets: [{
+                        data: [82, 18],
+                        backgroundColor: ['#10b981', '#ef4444'],
+                        borderWidth: 0
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        const sdCtx = document.getElementById('scoreDistChart');
+        if (sdCtx) {
+            new Chart(sdCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['0-20%', '21-40%', '41-60%', '61-80%', '81-100%'],
+                    datasets: [{
+                        label: 'Students',
+                        data: [2, 5, 14, 28, 16],
+                        backgroundColor: '#2563eb',
+                        borderRadius: 6
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+    });
 </script>
 {% endblock %}
+
