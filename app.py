@@ -1035,7 +1035,215 @@ def live_class_update_status_api(class_id=None):
             'timestamp': datetime.utcnow()
         })
 
-    return jsonify({'success': True, 'message': 'Status updated successfully'})
+# -----------------------------------------------------------------------------
+# LIVE CLASS & MONITORING EXTENDED API ENDPOINTS
+# -----------------------------------------------------------------------------
+
+db_live_class_requests = db['live_class_requests']
+db_monitoring_events = db['monitoring_events']
+db_warnings = db['warnings']
+db_exams = db['exam_codes']
+
+@app.route('/api/live-class/check-requests', methods=['GET'])
+@login_required
+def live_class_check_requests():
+    user = get_current_user()
+    class_id = request.args.get('class_id', type=int, default=1)
+    req = db_live_class_requests.find_one({'class_id': class_id, 'student_id': user.id, 'status': 'pending'})
+    if req:
+        return jsonify({
+            'has_request': True,
+            'request_id': req.get('id'),
+            'type': req.get('type', 'ask_to_answer')
+        })
+    return jsonify({'has_request': False})
+
+@app.route('/api/live-class/ask-to-answer', methods=['POST'])
+@login_required
+def live_class_ask_to_answer():
+    user = get_current_user()
+    data = request.get_json() or {}
+    class_id = int(data.get('class_id', 1))
+    student_id = int(data.get('student_id', 0))
+
+    req_id = get_next_id(db_live_class_requests)
+    req_doc = {
+        'id': req_id,
+        'class_id': class_id,
+        'student_id': student_id,
+        'teacher_id': user.id,
+        'status': 'pending',
+        'type': 'ask_to_answer',
+        'timestamp': datetime.utcnow()
+    }
+    db_live_class_requests.insert_one(req_doc)
+    return jsonify({'success': True, 'request_id': req_id})
+
+@app.route('/api/live-class/respond-request', methods=['POST'])
+@login_required
+def live_class_respond_request():
+    data = request.get_json() or {}
+    req_id = int(data.get('request_id', 0))
+    action = data.get('action', 'accept')
+    db_live_class_requests.update_one({'id': req_id}, {'$set': {'status': action, 'responded_at': datetime.utcnow()}})
+    return jsonify({'success': True})
+
+@app.route('/api/live-class/hand-raise', methods=['POST'])
+@login_required
+def live_class_hand_raise():
+    user = get_current_user()
+    data = request.get_json() or {}
+    class_id = int(data.get('class_id', 1))
+    action = data.get('action', 'toggle')
+    target_student_id = data.get('student_id')
+
+    student_id = int(target_student_id) if target_student_id else user.id
+
+    att = db_attendance.find_one({'class_id': class_id, 'student_id': student_id})
+    current_state = att.get('hand_raised', False) if att else False
+
+    new_state = False if action == 'acknowledge' else (not current_state if action == 'toggle' else True)
+    db_attendance.update_one(
+        {'class_id': class_id, 'student_id': student_id},
+        {'$set': {'hand_raised': new_state, 'last_activity': datetime.utcnow()}},
+        upsert=True
+    )
+    return jsonify({'success': True, 'hand_raised': new_state})
+
+@app.route('/api/live-class/join', methods=['POST', 'GET'])
+@app.route('/api/live-class/join-class', methods=['POST', 'GET'])
+@login_required
+def live_class_join():
+    user = get_current_user()
+    data = request.get_json() if request.is_json else request.values
+    class_id = int(data.get('class_id', 1))
+
+    db_attendance.update_one(
+        {'class_id': class_id, 'student_id': user.id},
+        {'$set': {'status': 'active', 'last_activity': datetime.utcnow()}},
+        upsert=True
+    )
+    return jsonify({'success': True, 'message': 'Joined classroom successfully'})
+
+@app.route('/api/live-class/leave', methods=['POST', 'GET'])
+@app.route('/api/live-class/leave-class', methods=['POST', 'GET'])
+@login_required
+def live_class_leave():
+    user = get_current_user()
+    data = request.get_json() if request.is_json else request.values
+    class_id = int(data.get('class_id', 1))
+
+    db_attendance.update_one(
+        {'class_id': class_id, 'student_id': user.id},
+        {'$set': {'status': 'left', 'camera_status': 'off', 'microphone_status': 'off', 'last_activity': datetime.utcnow()}}
+    )
+    return jsonify({'success': True, 'message': 'Left classroom successfully'})
+
+@app.route('/api/live-class/participants', methods=['GET'])
+@login_required
+def live_class_participants_api():
+    class_id = request.args.get('class_id', type=int, default=1)
+    p_docs = db_attendance.find({'class_id': class_id, 'status': 'active'})
+    participants = []
+    for p in p_docs:
+        p_obj = ClassParticipantDoc(p)
+        st = p_obj.student
+        participants.append({
+            'student_id': p_obj.student_id,
+            'student_name': st.name if st else f"Student #{p_obj.student_id}",
+            'camera_status': p_obj.camera_status or 'off',
+            'microphone_status': p_obj.microphone_status or 'off',
+            'hand_raised': bool(p_obj.hand_raised),
+            'is_speaking': bool(p_obj.is_speaking)
+        })
+    return jsonify({'success': True, 'participants': participants})
+
+@app.route('/api/live-class/messages', methods=['GET'])
+@login_required
+def live_class_messages_api():
+    class_id = request.args.get('class_id', type=int, default=1)
+    m_docs = db_chat_messages.find({'class_id': class_id})
+    messages = []
+    for m in m_docs:
+        m_obj = ChatMessageDoc(m)
+        snd = m_obj.sender
+        messages.append({
+            'sender_name': snd.name if snd else f"User #{m_obj.sender_id}",
+            'message': m_obj.message,
+            'timestamp': m_obj.timestamp.strftime('%I:%M %p') if isinstance(m_obj.timestamp, datetime) else ''
+        })
+    return jsonify({'success': True, 'messages': messages})
+
+@app.route('/api/monitoring/event', methods=['POST'])
+@app.route('/api/exam/monitoring/event', methods=['POST'])
+def monitoring_event_api():
+    data = request.get_json() or {}
+    evt_id = get_next_id(db_monitoring_events)
+    evt_doc = {
+        'id': evt_id,
+        'exam_id': int(data.get('exam_id', 1)),
+        'student_id': int(data.get('student_id', 1)),
+        'event_type': data.get('event_type') or data.get('event', 'unknown'),
+        'details': data.get('details', ''),
+        'timestamp': datetime.utcnow()
+    }
+    db_monitoring_events.insert_one(evt_doc)
+    return jsonify({'success': True, 'event_id': evt_id})
+
+@app.route('/api/monitoring/live-data', methods=['GET'])
+def monitoring_live_data_api():
+    exam_id = request.args.get('exam_id', type=int, default=1)
+    events = list(db_monitoring_events.find({'exam_id': exam_id}))
+    return jsonify({'success': True, 'events_count': len(events), 'events': []})
+
+@app.route('/api/monitoring/warning', methods=['POST'])
+def monitoring_warning_api():
+    data = request.get_json() or {}
+    warn_id = get_next_id(db_warnings)
+    db_warnings.insert_one({
+        'id': warn_id,
+        'exam_id': int(data.get('exam_id', 1)),
+        'student_id': int(data.get('student_id', 1)),
+        'message': data.get('message', 'Warning issued'),
+        'acknowledged': False,
+        'timestamp': datetime.utcnow()
+    })
+    return jsonify({'success': True, 'warning_id': warn_id})
+
+@app.route('/api/exam/student-warnings', methods=['GET'])
+def student_warnings_api():
+    user = get_current_user()
+    user_id = user.id if user else 1
+    warns = list(db_warnings.find({'student_id': user_id, 'acknowledged': False}))
+    return jsonify({'success': True, 'has_warnings': len(warns) > 0, 'warnings': [{'id': w.get('id'), 'message': w.get('message')} for w in warns]})
+
+@app.route('/api/exam/acknowledge-warning', methods=['POST'])
+def acknowledge_warning_api():
+    data = request.get_json() or {}
+    warn_id = data.get('warning_id')
+    if warn_id:
+        db_warnings.update_one({'id': int(warn_id)}, {'$set': {'acknowledged': True}})
+    return jsonify({'success': True})
+
+@app.route('/api/exam/verify-code', methods=['POST'])
+def exam_verify_code_api():
+    data = request.get_json() or {}
+    code = data.get('code', '').strip()
+    exam_doc = db_exams.find_one({'code': code})
+    if exam_doc:
+        return jsonify({'success': True, 'exam_id': exam_doc.get('id'), 'title': exam_doc.get('title')})
+    return jsonify({'success': False, 'message': 'Invalid exam code'}), 400
+
+@app.route('/api/exam/submit/<int:attempt_id>', methods=['POST'])
+@app.route('/api/exam/submit', methods=['POST'])
+def exam_submit_attempt_api(attempt_id=None):
+    return jsonify({'success': True, 'message': 'Exam submitted successfully'})
+
+@app.errorhandler(404)
+def handle_404_json(e):
+    if request.path.startswith('/api/'):
+        return jsonify({'error': 'API endpoint not found', 'path': request.path}), 404
+    return ("Page Not Found", 404)
 
 # -----------------------------------------------------------------------------
 # WEBRTC SIGNALING ENDPOINTS

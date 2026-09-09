@@ -754,6 +754,9 @@
         setInterval(async () => {
             try {
                 const response = await fetch(`/api/webrtc/signaling?class_id=${classId}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
                 const data = await response.json();
                 if (data.signals && data.signals.length > 0) {
                     for (const sig of data.signals) {
@@ -791,6 +794,9 @@
         setInterval(async () => {
             try {
                 const response = await fetch(`/api/live-class/check-requests?class_id=${classId}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
                 const data = await response.json();
 
                 if (data.has_request) {
@@ -805,16 +811,22 @@
     }
 
     async function respondToAskRequest(reqId, action) {
-        await fetch('/api/live-class/respond-request', {
+        const response = await fetch('/api/live-class/respond-request', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ request_id: reqId, action: action })
         });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
     }
 
     async function fetchClassState() {
         try {
             const response = await fetch(`/api/live-class/state/${classId}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
             const data = await response.json();
 
             document.getElementById('headerStudentCount').innerText = data.participant_count;
@@ -870,6 +882,9 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ class_id: classId, student_id: studentId })
         });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
         const res = await response.json();
         if (res.success) {
             if (window.showToast) window.showToast('Question prompt sent to student!', 'success');
