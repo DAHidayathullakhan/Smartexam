@@ -6,6 +6,30 @@
 
 class WebRTCManager {
     constructor() {
+        async requestMediaPermissions() {
+    try {
+        this.localStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true
+        });
+
+        this.debugState.cameraPermission = 'GRANTED';
+        this.debugState.micPermission = 'GRANTED';
+        this.debugState.localVideoTracks =
+            this.localStream.getVideoTracks().length;
+        this.debugState.localAudioTracks =
+            this.localStream.getAudioTracks().length;
+
+        console.log('Camera and microphone started');
+        return this.localStream;
+
+    } catch (error) {
+        console.error('Media error:', error);
+
+        this.debugState.cameraPermission = 'DENIED';
+        this.debugState.micPermission = 'DENIED';
+    }
+}
         this.peers = {}; // targetUserId -> { pc, remoteStream }
         this.localStream = null;
         this.localScreenStream = null;
@@ -523,6 +547,8 @@ class WebRTCManager {
 // Instantiate default singleton instance
 const defaultWebRTC = new WebRTCManager();
 window.webrtc = defaultWebRTC;
+
+defaultWebRTC.requestMediaPermissions();
 
 // Static proxy delegators on WebRTCManager class for seamless static calling
 WebRTCManager.initLocalMedia = function(...args) { return defaultWebRTC.initLocalMedia(...args); };
