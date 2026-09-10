@@ -779,7 +779,12 @@
                             continue;
                         }
 
-                        const act = sig.action || sig.signal_type || (sig.offer ? 'offer' : (sig.answer ? 'answer' : 'candidate'));
+                        let act = sig.action || sig.signal_type || (sig.offer ? 'offer' : (sig.answer ? 'answer' : 'candidate'));
+                        if (act) {
+                            act = String(act).toLowerCase();
+                            if (act === 'ice_candidate' || act === 'icecandidate') act = 'candidate';
+                        }
+
                         let payload = sig.payload || sig.data || sig.offer || sig.answer || sig.candidates;
 
                         if (typeof payload === 'string') {
@@ -787,7 +792,7 @@
                         }
 
                         if (act && payload && sig.from_user_id !== currentUserId) {
-                            console.log(`[WebRTC Signaling Received]: Processing ${act} from User #${sig.from_user_id} (Signal ID: ${sig.id})`);
+                            console.log(`[WEBRTC] Received ${act} signal from User #${sig.from_user_id} (Signal ID: ${sig.id})`);
                             if (sig.id) processedSignalIds.add(sig.id);
 
                             if (window.webrtc) {
@@ -799,7 +804,7 @@
                     }
                 }
             } catch (e) {
-                console.error('Signaling poll error:', e);
+                console.error('[WEBRTC] Signaling poll error:', e);
             }
         }, 1200);
     }
