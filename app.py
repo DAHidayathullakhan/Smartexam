@@ -1277,15 +1277,23 @@ def webrtc_signaling():
         return jsonify({'success': True, 'signal_id': sig_id})
     else:
         class_id = request.args.get('class_id', type=int, default=1)
-        signals_data = db_webrtc_signals.find({'class_id': class_id})
+        since_id = request.args.get('since_id', type=int, default=0)
+
+        query = {'class_id': class_id}
+        if since_id > 0:
+            query['id'] = {'$gt': since_id}
+
+        signals_data = db_webrtc_signals.find(query)
         my_signals = []
         for s in signals_data:
-            if s.get('to_user_id') == user.id or s.get('to_user_id') is None:
-                if s.get('from_user_id') != user.id:
+            to_uid = s.get('to_user_id')
+            from_uid = s.get('from_user_id')
+            if to_uid is None or str(to_uid) == str(user.id):
+                if str(from_uid) != str(user.id):
                     my_signals.append({
                         'id': s.get('id'),
-                        'from_user_id': s.get('from_user_id'),
-                        'to_user_id': s.get('to_user_id'),
+                        'from_user_id': from_uid,
+                        'to_user_id': to_uid,
                         'action': s.get('action') or s.get('signal_type'),
                         'signal_type': s.get('action') or s.get('signal_type'),
                         'payload': s.get('payload'),

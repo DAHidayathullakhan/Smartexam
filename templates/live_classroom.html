@@ -853,7 +853,15 @@
             document.getElementById('metricMicOn').innerText = data.mic_on_count;
             document.getElementById('metricSpeaking').innerText = data.speaking_count;
             document.getElementById('metricRaisedHands').innerText = data.raised_hands_count;
-            document.getElementById('metricScreenShare').innerText = data.screen_sharing_count;
+            if (data.participants && data.participants.length > 0) {
+                data.participants.forEach(p => {
+                    if (p.student_id && p.student_id !== currentUserId) {
+                        if (window.webrtc && !window.webrtc.peers[p.student_id]) {
+                            window.webrtc.connectToPeer(p.student_id, classId, null, true);
+                        }
+                    }
+                });
+            }
 
             const raisedContainer = document.getElementById('raisedHandsList');
             if (data.raised_hands.length > 0) {
