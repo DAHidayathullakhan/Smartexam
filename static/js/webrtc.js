@@ -50,26 +50,36 @@ class WebRTCManager {
         console.log('[WebRTC]: getUserMedia started');
         this.checkPermissionsStatus();
 
-        try {
-            const constraints = {
-                video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : {
-                    width: { ideal: 1280, max: 1920 },
-                    height: { ideal: 720, max: 1080 },
-                    frameRate: { ideal: 30, max: 60 },
-                    facingMode: 'user'
-                },
-                audio: audioDeviceId ? { deviceId: { exact: audioDeviceId } } : {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                }
-            };
+        const constraints = {
+            video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : {
+                width: { ideal: 1280, max: 1920 },
+                height: { ideal: 720, max: 1080 },
+                frameRate: { ideal: 30, max: 60 },
+                facingMode: 'user'
+            },
+            audio: audioDeviceId ? { deviceId: { exact: audioDeviceId } } : {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            }
+        };
 
+        try {
             try {
                 this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
             } catch (primaryErr) {
-                console.warn('[WebRTC]: Ideal constraints failed, falling back to simple video/audio request:', primaryErr);
-                this.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                console.warn('[WebRTC]: Ideal constraints failed, trying basic video+audio request:', primaryErr);
+                try {
+                    this.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                } catch (secondaryErr) {
+                    console.warn('[WebRTC]: Basic video+audio failed, trying audio-only fallback:', secondaryErr);
+                    try {
+                        this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    } catch (audioErr) {
+                        console.warn('[WebRTC]: Audio-only failed, trying video-only fallback:', audioErr);
+                        this.localStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    }
+                }
             }
 
             // Save stream globally for debugging and accessibility
@@ -85,8 +95,8 @@ class WebRTCManager {
             console.log(`[WebRTC]: Track count: Video: ${vTracks.length}, Audio: ${aTracks.length}`);
             console.log('[WebRTC]: Permission status: Camera GRANTED, Mic GRANTED');
 
-            this.debugState.cameraPermission = 'GRANTED 🟢';
-            this.debugState.micPermission = 'GRANTED 🟢';
+            this.debugState.cameraPermission = vTracks.length > 0 ? 'GRANTED 🟢' : 'NO CAM 🟡';
+            this.debugState.micPermission = aTracks.length > 0 ? 'GRANTED 🟢' : 'NO MIC 🟡';
             this.debugState.localVideoTracks = vTracks.length;
             this.debugState.localAudioTracks = aTracks.length;
             this.updateDebugPanel();
@@ -107,20 +117,35 @@ class WebRTCManager {
                 }
             }
 
+            // Re-attach local tracks to any existing RTCPeerConnections
+            if (this.peers) {
+                Object.values(this.peers).forEach(peerObj => {
+                    if (peerObj && peerObj.pc) {
+                        const senders = peerObj.pc.getSenders();
+                        this.localStream.getTracks().forEach(track => {
+                            if (!senders.some(s => s.track && s.track.kind === track.kind)) {
+                                try { peerObj.pc.addTrack(track, this.localStream); } catch(e) {}
+                            }
+                        });
+                    }
+                });
+            }
+
             if (typeof speakingCallback === 'function') {
                 this.setupAudioAnalyzer(speakingCallback);
             }
 
             return this.localStream;
         } catch (err) {
-            console.error('[WebRTC]: getUserMedia failed:', err);
-            this.debugState.cameraPermission = err.name === 'NotAllowedError' ? 'DENIED 🔴' : 'ERROR 🔴';
-            this.debugState.micPermission = err.name === 'NotAllowedError' ? 'DENIED 🔴' : 'ERROR 🔴';
+            console.error('[WebRTC]: getUserMedia failed or denied:', err);
+            const isDenied = err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError';
+            const isNotFound = err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError';
+
+            this.debugState.cameraPermission = isDenied ? 'DENIED 🔴' : (isNotFound ? 'NOT FOUND 🔴' : 'ERROR 🔴');
+            this.debugState.micPermission = isDenied ? 'DENIED 🔴' : (isNotFound ? 'NOT FOUND 🔴' : 'ERROR 🔴');
             this.updateDebugPanel();
 
-            if (err.name === 'NotAllowedError') {
-                alert('Camera & Microphone access was denied. Please allow permissions in browser settings.');
-            }
+            console.warn(`[WebRTC Permissions Notice]: ${err.name}: ${err.message}. Waiting for user gesture click on Camera/Mic buttons.`);
             return null;
         }
     }
