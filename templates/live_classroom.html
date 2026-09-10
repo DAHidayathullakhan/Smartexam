@@ -468,6 +468,7 @@
 
     document.addEventListener('DOMContentLoaded', async () => {
         checkMobileInsecureContext();
+        if (window.webrtc) window.webrtc.updateDebugPanel();
         setupClassroomControls();
         startClassStatePolling();
         startSignalingPolling();

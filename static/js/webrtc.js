@@ -54,8 +54,22 @@ class WebRTCManager {
     }
 
     async initLocalMedia(videoElemId, speakingCallback = null, audioDeviceId = null, videoDeviceId = null) {
-        console.log('[WEBRTC] getUserMedia started');
+        console.log('[MEDIA] Live class initialization started');
+        const hasMedia = Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+        console.log(`[MEDIA] navigator.mediaDevices: ${hasMedia}`);
         this.checkPermissionsStatus();
+
+        if (!hasMedia) {
+            const isSecure = window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+            console.error('[MEDIA] getUserMedia unavailable. Secure Context:', isSecure);
+            this.debugState.cameraPermission = 'UNSUPPORTED / HTTP 🔴';
+            this.debugState.micPermission = 'UNSUPPORTED / HTTP 🔴';
+            this.updateDebugPanel();
+            this.showUIMediaError('SecurityError', 'Camera and microphone access requires an HTTPS secure connection.');
+            return null;
+        }
+
+        console.log('[MEDIA] Requesting camera and microphone');
 
         const constraints = {
             video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : {
@@ -75,19 +89,21 @@ class WebRTCManager {
             try {
                 this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
             } catch (primaryErr) {
-                console.warn('[WEBRTC] Ideal constraints failed, trying basic video+audio request:', primaryErr);
+                console.warn('[MEDIA] Ideal constraints failed, trying basic video+audio request:', primaryErr);
                 try {
                     this.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 } catch (secondaryErr) {
-                    console.warn('[WEBRTC] Basic video+audio failed, trying audio-only fallback:', secondaryErr);
+                    console.warn('[MEDIA] Basic video+audio failed, trying audio-only fallback:', secondaryErr);
                     try {
                         this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     } catch (audioErr) {
-                        console.warn('[WEBRTC] Audio-only failed, trying video-only fallback:', audioErr);
+                        console.warn('[MEDIA] Audio-only failed, trying video-only fallback:', audioErr);
                         this.localStream = await navigator.mediaDevices.getUserMedia({ video: true });
                     }
                 }
             }
+
+            console.log('[MEDIA] getUserMedia success');
 
             window.localStream = this.localStream;
             window.webrtc.localStream = this.localStream;
@@ -96,9 +112,9 @@ class WebRTCManager {
             const vTracks = this.localStream.getVideoTracks();
             const aTracks = this.localStream.getAudioTracks();
 
-            console.log('[WEBRTC] Got local media');
-            console.log(`[WEBRTC] Local Stream ID: ${this.localStream.id}`);
-            console.log(`[WEBRTC] Track count: Video: ${vTracks.length}, Audio: ${aTracks.length}`);
+            console.log(`[MEDIA] Video tracks: ${vTracks.length}`);
+            console.log(`[MEDIA] Audio tracks: ${aTracks.length}`);
+            console.log(`[MEDIA] Local stream created. Stream ID: ${this.localStream.id}`);
 
             this.debugState.cameraPermission = vTracks.length > 0 ? 'GRANTED 🟢' : 'NO CAM 🟡';
             this.debugState.micPermission = aTracks.length > 0 ? 'GRANTED 🟢' : 'NO MIC 🟡';
@@ -110,17 +126,20 @@ class WebRTCManager {
             if (videoElemId) {
                 const localVideo = document.getElementById(videoElemId);
                 if (localVideo) {
+                    console.log(`[MEDIA] Local video element found: #${videoElemId}`);
                     localVideo.srcObject = this.localStream;
+                    console.log('[MEDIA] Local stream assigned to video');
                     localVideo.muted = true;
                     localVideo.setAttribute('autoplay', '');
                     localVideo.setAttribute('playsinline', '');
                     localVideo.setAttribute('webkit-playsinline', '');
                     try {
                         await localVideo.play();
-                        console.log(`[WEBRTC] Attached local stream to video element #${videoElemId}`);
                     } catch (e) {
-                        console.warn(`[WEBRTC] Local video play notice:`, e);
+                        console.warn('[MEDIA] Local video play notice:', e);
                     }
+                } else {
+                    console.warn(`[MEDIA] Local video element NOT found: #${videoElemId}`);
                 }
             }
 
@@ -147,16 +166,50 @@ class WebRTCManager {
 
             return this.localStream;
         } catch (err) {
-            console.error('[WEBRTC] getUserMedia failed or denied:', err);
-            const isDenied = err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError';
-            const isNotFound = err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError';
+            console.error(`[MEDIA] getUserMedia failed. Name: ${err.name}, Message: ${err.message}`, err);
 
-            this.debugState.cameraPermission = isDenied ? 'DENIED 🔴' : (isNotFound ? 'NOT FOUND 🔴' : 'ERROR 🔴');
-            this.debugState.micPermission = isDenied ? 'DENIED 🔴' : (isNotFound ? 'NOT FOUND 🔴' : 'ERROR 🔴');
+            let userMsg = 'Unable to access camera/microphone.';
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                userMsg = 'Camera and microphone permission denied. Please allow camera & microphone access in your browser address bar.';
+                this.debugState.cameraPermission = 'DENIED 🔴';
+                this.debugState.micPermission = 'DENIED 🔴';
+            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                userMsg = 'No camera or microphone hardware found on this device.';
+                this.debugState.cameraPermission = 'NOT FOUND 🔴';
+                this.debugState.micPermission = 'NOT FOUND 🔴';
+            } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                userMsg = 'Camera or microphone is already in use by another application (e.g., Zoom, Teams, Skype).';
+                this.debugState.cameraPermission = 'HARDWARE BUSY 🔴';
+                this.debugState.micPermission = 'HARDWARE BUSY 🔴';
+            } else if (err.name === 'OverconstrainedError') {
+                userMsg = 'Your camera does not support the requested video resolution/constraints.';
+                this.debugState.cameraPermission = 'OVERCONSTRAINED 🔴';
+                this.debugState.micPermission = 'OVERCONSTRAINED 🔴';
+            } else if (err.name === 'SecurityError') {
+                userMsg = 'Camera access blocked due to insecure HTTP connection. HTTPS is required.';
+                this.debugState.cameraPermission = 'SECURITY ERROR 🔴';
+                this.debugState.micPermission = 'SECURITY ERROR 🔴';
+            } else {
+                this.debugState.cameraPermission = 'ERROR 🔴';
+                this.debugState.micPermission = 'ERROR 🔴';
+            }
+
             this.updateDebugPanel();
-
-            console.warn(`[WEBRTC] Permissions Notice: ${err.name}: ${err.message}`);
+            this.showUIMediaError(err.name, userMsg);
             return null;
+        }
+    }
+
+    showUIMediaError(errorName, errorMessage) {
+        const container = document.getElementById('mediaErrorAlertContainer') || document.getElementById('mobileHttpsNoticeBanner');
+        if (container) {
+            container.style.setProperty('display', 'flex', 'important');
+            container.innerHTML = `
+                <div class="alert alert-danger alert-dismissible fade show w-100 m-0 shadow" role="alert">
+                    <strong><i class="fa-solid fa-triangle-exclamation me-2"></i> Media Permission Error (${errorName}):</strong> ${errorMessage}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            `;
         }
     }
 
@@ -246,7 +299,7 @@ class WebRTCManager {
             return this.peers[targetUserId];
         }
 
-        console.log('[WEBRTC] Creating peer connection');
+        console.log('[MEDIA] Creating WebRTC peer connection');
         console.log(`[WEBRTC] Creating RTCPeerConnection for Peer #${targetUserId} (Initiator: ${isInitiator})...`);
         const pc = new RTCPeerConnection(this.iceServers);
 
@@ -740,29 +793,27 @@ class WebRTCManager {
     }
 
     updateDebugPanel() {
-        const setTxt = (id, val) => {
-            const el = document.getElementById(id);
+        const setTxt = (id, altId, val) => {
+            const el = document.getElementById(id) || document.getElementById(altId);
             if (el) el.innerText = val;
         };
 
-        setTxt('dbg_is_https', this.debugState.isHttps);
-        setTxt('dbg_is_secure', this.debugState.isSecureContext);
-        setTxt('dbg_cam_perm', this.debugState.cameraPermission);
-        setTxt('dbg_mic_perm', this.debugState.micPermission);
-        setTxt('dbg_loc_vid', this.debugState.localVideoTracks);
-        setTxt('dbg_loc_aud', this.debugState.localAudioTracks);
-        setTxt('dbg_peer_state', this.debugState.peerState);
-        setTxt('dbg_ice_state', this.debugState.iceState);
-        setTxt('dbg_rem_vid', this.debugState.remoteVideoTracks);
-        setTxt('dbg_rem_aud', this.debugState.remoteAudioTracks);
+        setTxt('dbgHttps', 'dbg_is_https', this.debugState.isHttps);
+        setTxt('dbgSecureContext', 'dbg_is_secure', this.debugState.isSecureContext);
+        setTxt('dbgCamPerm', 'dbg_cam_perm', this.debugState.cameraPermission);
+        setTxt('dbgMicPerm', 'dbg_mic_perm', this.debugState.micPermission);
+        setTxt('dbgLocalVideoTracks', 'dbg_loc_vid', this.debugState.localVideoTracks);
+        setTxt('dbgLocalAudioTracks', 'dbg_loc_aud', this.debugState.localAudioTracks);
+        setTxt('dbgPeerState', 'dbg_peer_state', this.debugState.peerState);
+        setTxt('dbgIceState', 'dbg_ice_state', this.debugState.iceState);
+        setTxt('dbgRemoteVideoTracks', 'dbg_rem_vid', this.debugState.remoteVideoTracks);
+        setTxt('dbgRemoteAudioTracks', 'dbg_rem_aud', this.debugState.remoteAudioTracks);
     }
 }
 
 // Instantiate default singleton instance
 const defaultWebRTC = new WebRTCManager();
 window.webrtc = defaultWebRTC;
-
-defaultWebRTC.requestMediaPermissions();
 
 // Static proxy delegators on WebRTCManager class for seamless static calling
 WebRTCManager.initLocalMedia = function(...args) { return defaultWebRTC.initLocalMedia(...args); };
