@@ -6,30 +6,6 @@
 
 class WebRTCManager {
     constructor() {
-        async requestMediaPermissions() {
-    try {
-        this.localStream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true
-        });
-
-        this.debugState.cameraPermission = 'GRANTED';
-        this.debugState.micPermission = 'GRANTED';
-        this.debugState.localVideoTracks =
-            this.localStream.getVideoTracks().length;
-        this.debugState.localAudioTracks =
-            this.localStream.getAudioTracks().length;
-
-        console.log('Camera and microphone started');
-        return this.localStream;
-
-    } catch (error) {
-        console.error('Media error:', error);
-
-        this.debugState.cameraPermission = 'DENIED';
-        this.debugState.micPermission = 'DENIED';
-    }
-}
         this.peers = {}; // targetUserId -> { pc, remoteStream }
         this.localStream = null;
         this.localScreenStream = null;
@@ -67,6 +43,27 @@ class WebRTCManager {
                 { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
             ]
         };
+    }
+
+    async requestMediaPermissions() {
+        try {
+            this.localStream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: true
+            });
+
+            this.debugState.cameraPermission = 'GRANTED';
+            this.debugState.micPermission = 'GRANTED';
+            this.debugState.localVideoTracks = this.localStream.getVideoTracks().length;
+            this.debugState.localAudioTracks = this.localStream.getAudioTracks().length;
+
+            console.log('Camera and microphone started');
+            return this.localStream;
+        } catch (error) {
+            console.error('Media error:', error);
+            this.debugState.cameraPermission = 'DENIED';
+            this.debugState.micPermission = 'DENIED';
+        }
     }
 
     /**
@@ -389,13 +386,40 @@ class WebRTCManager {
 
         try {
             let parsedData = data;
-            if (typeof data === 'string') {
-                try { parsedData = JSON.parse(data); } catch(e) {}
+            if (typeof parsedData === 'string') {
+                try { parsedData = JSON.parse(parsedData); } catch(e) {}
+            }
+            if (typeof parsedData === 'string') {
+                try { parsedData = JSON.parse(parsedData); } catch(e) {}
+            }
+
+            // Extract SDP object if wrapped
+            let sdpObj = parsedData;
+            if (parsedData && typeof parsedData === 'object') {
+                if (parsedData.payload && typeof parsedData.payload === 'object') {
+                    sdpObj = parsedData.payload;
+                } else if (parsedData.offer && typeof parsedData.offer === 'object') {
+                    sdpObj = parsedData.offer;
+                } else if (parsedData.answer && typeof parsedData.answer === 'object') {
+                    sdpObj = parsedData.answer;
+                }
             }
 
             if (type === 'offer') {
-                console.log(`[WebRTC STEP 5 - SDP OFFER RECEIVED]: Received offer from Peer #${senderUserId}. Setting remote description & creating Answer...`);
-                await pc.setRemoteDescription(new RTCSessionDescription(parsedData));
+                console.log(`OFFER received from Peer #${senderUserId}`);
+
+                if (sdpObj && typeof sdpObj === 'object' && !sdpObj.type) {
+                    sdpObj.type = 'offer';
+                }
+
+                // 1. setRemoteDescription(offer)
+                try {
+                    await pc.setRemoteDescription(new RTCSessionDescription(sdpObj));
+                    console.log(`setRemoteDescription success for OFFER from Peer #${senderUserId}`);
+                } catch (err) {
+                    console.error(`setRemoteDescription error for OFFER from Peer #${senderUserId}:`, err);
+                    throw err;
+                }
 
                 // Flush queued ICE candidates
                 if (peerObj.iceCandidatesQueue && peerObj.iceCandidatesQueue.length > 0) {
@@ -405,14 +429,49 @@ class WebRTCManager {
                     peerObj.iceCandidatesQueue = [];
                 }
 
-                const answerOptions = { offerToReceiveAudio: true, offerToReceiveVideo: true };
-                const answer = await pc.createAnswer(answerOptions);
-                await pc.setLocalDescription(answer);
-                console.log(`[WebRTC STEP 5 - SDP ANSWER GENERATED]: Sending answer to Peer #${senderUserId}`, answer);
-                this.sendSignaling(classId, senderUserId, 'answer', answer);
+                // 2. createAnswer()
+                let answer;
+                try {
+                    const answerOptions = { offerToReceiveAudio: true, offerToReceiveVideo: true };
+                    answer = await pc.createAnswer(answerOptions);
+                    console.log(`createAnswer success for Peer #${senderUserId}`);
+                } catch (err) {
+                    console.error(`createAnswer error for Peer #${senderUserId}:`, err);
+                    throw err;
+                }
+
+                // 3. setLocalDescription(answer)
+                try {
+                    await pc.setLocalDescription(answer);
+                    console.log(`setLocalDescription success for Peer #${senderUserId}`);
+                } catch (err) {
+                    console.error(`setLocalDescription error for Peer #${senderUserId}:`, err);
+                    throw err;
+                }
+
+                // 4. POST answer to /api/webrtc/signal
+                try {
+                    await this.sendSignaling(classId, senderUserId, 'answer', answer);
+                    console.log(`ANSWER sent to Peer #${senderUserId}`);
+                } catch (err) {
+                    console.error(`fetch POST error sending ANSWER to Peer #${senderUserId}:`, err);
+                    throw err;
+                }
+
             } else if (type === 'answer') {
-                console.log(`[WebRTC STEP 5 - SDP ANSWER RECEIVED]: Received answer from Peer #${senderUserId}. Setting remote description...`);
-                await pc.setRemoteDescription(new RTCSessionDescription(parsedData));
+                console.log(`ANSWER received from Peer #${senderUserId}`);
+
+                if (sdpObj && typeof sdpObj === 'object' && !sdpObj.type) {
+                    sdpObj.type = 'answer';
+                }
+
+                try {
+                    await pc.setRemoteDescription(new RTCSessionDescription(sdpObj));
+                    console.log(`setRemoteDescription success for ANSWER from Peer #${senderUserId}`);
+                } catch (err) {
+                    console.error(`setRemoteDescription error for ANSWER from Peer #${senderUserId}:`, err);
+                    throw err;
+                }
 
                 // Flush queued ICE candidates
                 if (peerObj.iceCandidatesQueue && peerObj.iceCandidatesQueue.length > 0) {
@@ -423,18 +482,28 @@ class WebRTCManager {
                 }
 
                 console.log(`[WebRTC STEP 5 SUCCESS]: P2P SDP Handshake Complete for Peer #${senderUserId}`);
+
             } else if (type === 'candidate') {
+                let candObj = sdpObj;
+                if (candObj && typeof candObj === 'object' && candObj.candidate) {
+                    candObj = candObj.candidate;
+                }
+
                 if (pc.remoteDescription && pc.remoteDescription.type) {
                     console.log(`[WebRTC STEP 6 - ICE CANDIDATE RECEIVED]: Adding ICE candidate from Peer #${senderUserId}`);
-                    await pc.addIceCandidate(new RTCIceCandidate(parsedData));
+                    try {
+                        await pc.addIceCandidate(new RTCIceCandidate(candObj));
+                    } catch (err) {
+                        console.error(`addIceCandidate error from Peer #${senderUserId}:`, err);
+                    }
                 } else {
                     console.log(`[WebRTC STEP 6 - ICE CANDIDATE QUEUED]: Remote description not set yet for Peer #${senderUserId}, queuing candidate...`);
                     if (!peerObj.iceCandidatesQueue) peerObj.iceCandidatesQueue = [];
-                    peerObj.iceCandidatesQueue.push(parsedData);
+                    peerObj.iceCandidatesQueue.push(candObj);
                 }
             }
         } catch (e) {
-            console.error(`[WebRTC STEP 5/6 ERROR]: Failed processing ${type} signal from Peer #${senderUserId}:`, e);
+            console.error(`[WebRTC Signaling Process Error]: Failed processing ${type} signal from Peer #${senderUserId}:`, e);
         }
     }
 
@@ -444,7 +513,7 @@ class WebRTCManager {
     async sendSignaling(classId, targetUserId, signalType, payload) {
         try {
             console.log(`[WebRTC STEP 4 - SIGNAL TRANSMISSION]: Sending ${signalType} to Target User #${targetUserId}`);
-            await fetch('/api/webrtc/signal', {
+            const response = await fetch('/api/webrtc/signal', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -457,8 +526,16 @@ class WebRTCManager {
                     data: payload
                 })
             });
+            if (!response.ok) {
+                console.error(`fetch POST error sending ${signalType}: HTTP ${response.status}`);
+                throw new Error(`HTTP ${response.status}`);
+            }
+            if (signalType === 'answer') {
+                console.log(`ANSWER sent successfully to /api/webrtc/signal for Peer #${targetUserId}`);
+            }
         } catch (e) {
-            console.error('[WebRTC STEP 4 ERROR]: Signaling POST failed:', e);
+            console.error(`fetch POST error sending ${signalType}:`, e);
+            throw e;
         }
     }
 
