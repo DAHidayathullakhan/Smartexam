@@ -317,38 +317,59 @@ class WebRTCManager {
         // STEP 7 & STEP 8: Remote Track Reception & Audio Unmuting
         pc.ontrack = (event) => {
             console.log('[WEBRTC] Remote track received');
-            console.log(`[WEBRTC] Received remote track (${event.track.kind}) from Peer #${targetUserId}`);
+            console.log(`[WEBRTC] Track kind: ${event.track.kind}, id: ${event.track.id} from Peer #${targetUserId}`);
+            
             peerObj.remoteStream.addTrack(event.track);
 
-            this.debugState.remoteVideoTracks = peerObj.remoteStream.getVideoTracks().length;
-            this.debugState.remoteAudioTracks = peerObj.remoteStream.getAudioTracks().length;
+            const vTracks = peerObj.remoteStream.getVideoTracks();
+            const aTracks = peerObj.remoteStream.getAudioTracks();
+
+            console.log(`[WEBRTC] Remote stream track count: ${peerObj.remoteStream.getTracks().length}`);
+            console.log(`[WEBRTC] Remote video track present: ${vTracks.length > 0}`);
+            console.log(`[WEBRTC] Remote audio track present: ${aTracks.length > 0}`);
+
+            this.debugState.remoteVideoTracks = vTracks.length;
+            this.debugState.remoteAudioTracks = aTracks.length;
             this.updateDebugPanel();
 
             const targetVideoId = remoteVideoElemId || `video_user_${targetUserId}`;
             const targetAvatarId = `avatar_user_${targetUserId}`;
-            const remoteVideo = document.getElementById(targetVideoId);
-            const remoteAvatar = document.getElementById(targetAvatarId);
+            
+            let remoteVideo = document.getElementById(targetVideoId);
+
+            if (!remoteVideo) {
+                console.warn(`[WEBRTC] Remote video element #${targetVideoId} not found in DOM! Attempting dynamic card creation...`);
+                remoteVideo = this.ensureParticipantCard(targetUserId, targetVideoId);
+            }
 
             if (remoteVideo) {
+                console.log(`[WEBRTC] Remote video element found: #${targetVideoId}`);
+
                 remoteVideo.srcObject = peerObj.remoteStream;
-                // STEP 8: REMOTE AUDIO MUST BE AUDIBLE (muted = false!)
+                console.log(`[WEBRTC] video.srcObject assigned for #${targetVideoId}`);
+
+                // REMOTE AUDIO MUST BE AUDIBLE (muted = false!)
                 remoteVideo.muted = false;
-                // Android Chrome Mobile Browser Attributes
                 remoteVideo.setAttribute('autoplay', '');
                 remoteVideo.setAttribute('playsinline', '');
                 remoteVideo.setAttribute('webkit-playsinline', '');
                 remoteVideo.style.display = 'block';
+
+                const remoteAvatar = document.getElementById(targetAvatarId);
                 if (remoteAvatar) remoteAvatar.style.display = 'none';
 
-                console.log(`[WEBRTC] Bound remote MediaStream to #${targetVideoId}. Muted: false`);
-
-                // Autoplay Catch Handler
+                // Autoplay Catch Handler with user interaction fallback
                 const playPromise = remoteVideo.play();
                 if (playPromise !== undefined) {
-                    playPromise.catch(err => {
-                        console.warn(`[WEBRTC] Remote playback pending user interaction for #${targetVideoId}:`, err);
+                    playPromise.then(() => {
+                        console.log(`[WEBRTC] video.play() success for #${targetVideoId}`);
+                    }).catch(err => {
+                        console.error(`[WEBRTC] video.play() error for #${targetVideoId}:`, err);
+                        
                         const enableAudioTouch = () => {
-                            remoteVideo.play().catch(e => {});
+                            remoteVideo.play()
+                                .then(() => console.log(`[WEBRTC] video.play() user interaction success for #${targetVideoId}`))
+                                .catch(e => console.error(`[WEBRTC] video.play() retry failed for #${targetVideoId}:`, e));
                             document.removeEventListener('touchstart', enableAudioTouch);
                             document.removeEventListener('click', enableAudioTouch);
                         };
@@ -356,6 +377,8 @@ class WebRTCManager {
                         document.addEventListener('click', enableAudioTouch, { once: true });
                     });
                 }
+            } else {
+                console.error(`[WEBRTC] Remote video element not found: #${targetVideoId}`);
             }
         };
 
@@ -617,10 +640,46 @@ class WebRTCManager {
         this.localScreenStream = null;
     }
 
-    viewStudentScreenStream(examId, studentId, videoElem, badgeElem) {
-        if (!videoElem) return;
-        videoElem.style.display = 'block';
-        if (badgeElem) badgeElem.innerHTML = '<span class="badge bg-success mb-1">🟢 LIVE WEBRTC SCREEN STREAM</span>';
+    ensureParticipantCard(targetUserId, targetVideoId = null) {
+        const vId = targetVideoId || `video_user_${targetUserId}`;
+        let remoteVideo = document.getElementById(vId);
+        if (remoteVideo) return remoteVideo;
+
+        const grid = document.getElementById('classParticipantGrid');
+        if (!grid) {
+            console.error(`[WEBRTC] #classParticipantGrid container not found in DOM!`);
+            return null;
+        }
+
+        const col = document.createElement('div');
+        col.className = 'col-md-4 col-6';
+        col.id = `col_user_${targetUserId}`;
+        col.innerHTML = `
+            <div class="participant-grid-card p-2 text-center" id="card_user_${targetUserId}">
+                <span id="badge_speaking_${targetUserId}" class="badge bg-success position-absolute top-0 start-0 m-2" style="display: none; z-index: 10;">🟢 SPEAKING</span>
+                <video id="${vId}" autoplay playsinline class="live-video-elem" style="display: block; width: 100%; height: 145px; object-fit: cover; border-radius: 10px;"></video>
+                <div id="avatar_user_${targetUserId}" class="participant-avatar-placeholder" style="display: none;">
+                    U${targetUserId}
+                </div>
+                <div class="px-2 mt-1">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fw-bold text-white small text-truncate">Participant #${targetUserId}</span>
+                        <span class="badge bg-success" style="font-size: 0.6rem;">🟢 ACTIVE</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-1" style="font-size: 0.65rem;">
+                        <span id="badge_cam_${targetUserId}" class="badge bg-success">📹 Cam ON</span>
+                        <span id="badge_mic_${targetUserId}" class="badge bg-success">🟢 MIC ON</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        grid.appendChild(col);
+
+        remoteVideo = document.getElementById(vId);
+        if (remoteVideo) {
+            console.log(`[WEBRTC] Dynamically created video element #${vId} in #classParticipantGrid`);
+        }
+        return remoteVideo;
     }
 
     updateDebugPanel() {
