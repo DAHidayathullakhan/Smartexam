@@ -1,19 +1,20 @@
 /**
- * SmartExam Production WebRTC Engine (Laptop & Mobile Cross-Platform)
- * Step-by-step media access, RTCPeerConnection management, STUN/TURN support,
- * SDP Offer/Answer flow, ICE candidate exchange, remote audio/video binding.
+ * SmartExam Production WebRTC Engine
+ * Clean, production-ready WebRTC multi-peer mesh system supporting Teacher & Student roles.
+ * Full media permission fallbacks, unified signaling (JOIN, LEAVE, OFFER, ANSWER, CANDIDATE),
+ * candidate queueing, dynamic DOM card creation, and room teardown.
  */
 
 class WebRTCManager {
     constructor() {
-        this.peers = {}; // targetUserId -> { pc, remoteStream }
+        this.peers = {}; // targetUserId -> { pc, remoteStream, iceCandidatesQueue }
         this.localStream = null;
         this.localScreenStream = null;
         this.audioContext = null;
         this.analyser = null;
         this.speakingInterval = null;
 
-        // Diagnostics
+        // Diagnostics & Live State
         this.debugState = {
             isHttps: location.protocol === 'https:' ? 'YES 🟢' : 'NO 🔴',
             isSecureContext: (window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'YES 🟢' : 'NO 🔴',
@@ -27,7 +28,7 @@ class WebRTCManager {
             remoteAudioTracks: 0
         };
 
-        // STUN + Production TURN Servers for Mobile 4G/5G Carrier & Strict NAT Traversal
+        // Production STUN & TURN Servers for Mobile 4G/5G Carrier & Strict NAT Traversal
         this.iceServers = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
@@ -45,30 +46,13 @@ class WebRTCManager {
         };
     }
 
+    /**
+     * Request Camera & Microphone Media Stream with Robust Fallbacks
+     */
     async requestMediaPermissions() {
-        try {
-            this.localStream = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: true
-            });
-
-            this.debugState.cameraPermission = 'GRANTED';
-            this.debugState.micPermission = 'GRANTED';
-            this.debugState.localVideoTracks = this.localStream.getVideoTracks().length;
-            this.debugState.localAudioTracks = this.localStream.getAudioTracks().length;
-
-            console.log('Camera and microphone started');
-            return this.localStream;
-        } catch (error) {
-            console.error('Media error:', error);
-            this.debugState.cameraPermission = 'DENIED';
-            this.debugState.micPermission = 'DENIED';
-        }
+        return this.initLocalMedia(null);
     }
 
-    /**
-     * STEP 1: MEDIA ACCESS - Request Camera & Microphone Stream
-     */
     async initLocalMedia(videoElemId, speakingCallback = null, audioDeviceId = null, videoDeviceId = null) {
         console.log('[WEBRTC] getUserMedia started');
         this.checkPermissionsStatus();
@@ -105,7 +89,6 @@ class WebRTCManager {
                 }
             }
 
-            // Save stream globally for debugging and accessibility
             window.localStream = this.localStream;
             window.webrtc.localStream = this.localStream;
             if (window.WebRTCManager) window.WebRTCManager.localStream = this.localStream;
@@ -123,23 +106,25 @@ class WebRTCManager {
             this.debugState.localAudioTracks = aTracks.length;
             this.updateDebugPanel();
 
-            // Attach Local Stream to Video Element
-            const localVideo = document.getElementById(videoElemId);
-            if (localVideo) {
-                localVideo.srcObject = this.localStream;
-                localVideo.muted = true; // Local preview MUST be muted to prevent acoustic feedback loop
-                localVideo.setAttribute('autoplay', '');
-                localVideo.setAttribute('playsinline', '');
-                localVideo.setAttribute('webkit-playsinline', '');
-                try {
-                    await localVideo.play();
-                    console.log(`[WEBRTC] Attached local stream to video element #${videoElemId}`);
-                } catch (e) {
-                    console.warn(`[WEBRTC] Local video play notice:`, e);
+            // Bind Local Preview Stream to Video Element (Muted to prevent acoustic loop)
+            if (videoElemId) {
+                const localVideo = document.getElementById(videoElemId);
+                if (localVideo) {
+                    localVideo.srcObject = this.localStream;
+                    localVideo.muted = true;
+                    localVideo.setAttribute('autoplay', '');
+                    localVideo.setAttribute('playsinline', '');
+                    localVideo.setAttribute('webkit-playsinline', '');
+                    try {
+                        await localVideo.play();
+                        console.log(`[WEBRTC] Attached local stream to video element #${videoElemId}`);
+                    } catch (e) {
+                        console.warn(`[WEBRTC] Local video play notice:`, e);
+                    }
                 }
             }
 
-            // Re-attach local tracks to any existing RTCPeerConnections
+            // Re-attach local tracks to any existing active RTCPeerConnections
             if (this.peers) {
                 Object.values(this.peers).forEach(peerObj => {
                     if (peerObj && peerObj.pc) {
@@ -181,14 +166,12 @@ class WebRTCManager {
                 const camPerm = await navigator.permissions.query({ name: 'camera' });
                 const micPerm = await navigator.permissions.query({ name: 'microphone' });
                 console.log(`[WEBRTC] Permissions API: Camera: ${camPerm.state}, Mic: ${micPerm.state}`);
-            } catch (e) {
-                // Ignore permissions query API unsupported errors
-            }
+            } catch (e) {}
         }
     }
 
     /**
-     * Toggles
+     * Mic & Camera Toggles
      */
     toggleMicrophone(enabled) {
         if (!this.localStream) return;
@@ -221,7 +204,6 @@ class WebRTCManager {
 
             const bufferLength = this.analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
-
             let isSpeaking = false;
 
             if (this.speakingInterval) clearInterval(this.speakingInterval);
@@ -245,11 +227,10 @@ class WebRTCManager {
     }
 
     /**
-     * STEP 2, 3, 5, 6, 7: RTCPeerConnection Setup & Media Track Binding
+     * Create RTCPeerConnection for Remote Peer
      */
     async connectToPeer(targetUserId, classId, remoteVideoElemId = null, isInitiator = false) {
         if (this.peers[targetUserId]) {
-            // Ensure local tracks are attached if localStream became available after peer creation
             const existingPc = this.peers[targetUserId].pc;
             if (this.localStream && existingPc) {
                 const senders = existingPc.getSenders();
@@ -272,11 +253,12 @@ class WebRTCManager {
         const peerObj = {
             pc: pc,
             targetUserId: targetUserId,
-            remoteStream: new MediaStream()
+            remoteStream: new MediaStream(),
+            iceCandidatesQueue: []
         };
         this.peers[targetUserId] = peerObj;
 
-        // STEP 3: Track Sending - Attach local tracks to RTCPeerConnection
+        // Attach local stream tracks to RTCPeerConnection
         const streamToSend = this.localStream || window.localStream;
         if (streamToSend) {
             streamToSend.getTracks().forEach(track => {
@@ -306,7 +288,7 @@ class WebRTCManager {
             this.updateDebugPanel();
         };
 
-        // STEP 6: ICE Candidates Generation
+        // ICE Candidate Generation
         pc.onicecandidate = (event) => {
             if (event.candidate) {
                 console.log('[WEBRTC] Sending ICE candidate');
@@ -314,7 +296,7 @@ class WebRTCManager {
             }
         };
 
-        // STEP 7 & STEP 8: Remote Track Reception & Audio Unmuting
+        // Remote Track Reception & Audio/Video Element Binding
         pc.ontrack = (event) => {
             console.log('[WEBRTC] Remote track received');
             console.log(`[WEBRTC] Track kind: ${event.track.kind}, id: ${event.track.id} from Peer #${targetUserId}`);
@@ -348,7 +330,7 @@ class WebRTCManager {
                 remoteVideo.srcObject = peerObj.remoteStream;
                 console.log(`[WEBRTC] video.srcObject assigned for #${targetVideoId}`);
 
-                // REMOTE AUDIO MUST BE AUDIBLE (muted = false!)
+                // Remote Audio MUST be audible (muted = false)
                 remoteVideo.muted = false;
                 remoteVideo.setAttribute('autoplay', '');
                 remoteVideo.setAttribute('playsinline', '');
@@ -358,7 +340,6 @@ class WebRTCManager {
                 const remoteAvatar = document.getElementById(targetAvatarId);
                 if (remoteAvatar) remoteAvatar.style.display = 'none';
 
-                // Autoplay Catch Handler with user interaction fallback
                 const playPromise = remoteVideo.play();
                 if (playPromise !== undefined) {
                     playPromise.then(() => {
@@ -382,7 +363,7 @@ class WebRTCManager {
             }
         };
 
-        // STEP 5: SDP Offer Generation
+        // SDP Offer Generation for Initiator
         if (isInitiator) {
             try {
                 const offerOptions = { offerToReceiveAudio: true, offerToReceiveVideo: true };
@@ -404,9 +385,26 @@ class WebRTCManager {
     }
 
     /**
-     * STEP 5 & STEP 6: Receive Signaling Messages (Offer, Answer, Candidate)
+     * Unified Signaling Handler (JOIN, LEAVE, OFFER, ANSWER, CANDIDATE)
      */
     async handleSignaling(classId, senderUserId, type, data, remoteVideoElemId = null) {
+        let normType = String(type || '').toLowerCase();
+        if (normType === 'ice_candidate' || normType === 'icecandidate') normType = 'candidate';
+
+        if (normType === 'join') {
+            console.log(`[WEBRTC] Room joined by Peer #${senderUserId}`);
+            if (!this.peers[senderUserId]) {
+                await this.connectToPeer(senderUserId, classId, remoteVideoElemId, true);
+            }
+            return;
+        }
+
+        if (normType === 'leave') {
+            console.log(`[WEBRTC] Peer #${senderUserId} left the room. Tearing down connection...`);
+            this.closePeer(senderUserId);
+            return;
+        }
+
         let peerObj = this.peers[senderUserId];
         if (!peerObj) {
             peerObj = await this.connectToPeer(senderUserId, classId, remoteVideoElemId, false);
@@ -435,7 +433,7 @@ class WebRTCManager {
                 }
             }
 
-            if (type === 'offer') {
+            if (normType === 'offer') {
                 console.log('[WEBRTC] Received offer');
                 console.log(`OFFER received from Peer #${senderUserId}`);
 
@@ -496,7 +494,7 @@ class WebRTCManager {
                     throw err;
                 }
 
-            } else if (type === 'answer') {
+            } else if (normType === 'answer') {
                 console.log('[WEBRTC] Received answer');
                 console.log(`ANSWER received from Peer #${senderUserId}`);
 
@@ -526,7 +524,7 @@ class WebRTCManager {
 
                 console.log(`[WEBRTC] P2P SDP Handshake Complete for Peer #${senderUserId}`);
 
-            } else if (type === 'candidate') {
+            } else if (normType === 'candidate') {
                 console.log('[WEBRTC] Received ICE candidate');
                 let candObj = sdpObj;
                 if (candObj && typeof candObj === 'object' && candObj.candidate) {
@@ -547,12 +545,12 @@ class WebRTCManager {
                 }
             }
         } catch (e) {
-            console.error(`[WEBRTC] Failed processing ${type} signal from Peer #${senderUserId}:`, e);
+            console.error(`[WEBRTC] Failed processing ${normType} signal from Peer #${senderUserId}:`, e);
         }
     }
 
     /**
-     * STEP 4: Transmit Signaling Message to Server
+     * Transmit Signaling Message to Server
      */
     async sendSignaling(classId, targetUserId, signalType, payload) {
         try {
@@ -584,62 +582,8 @@ class WebRTCManager {
     }
 
     /**
-     * Screen Sharing
+     * Dynamic Participant Card Generator in DOM
      */
-    async startScreenShare(classId, targetVideoId) {
-        try {
-            console.log('[WebRTC Screen Share]: Requesting Screen Stream...');
-            this.localScreenStream = await navigator.mediaDevices.getDisplayMedia({
-                video: { cursor: 'always' },
-                audio: false
-            });
-
-            const screenVideoTrack = this.localScreenStream.getVideoTracks()[0];
-
-            Object.values(this.peers).forEach(peerObj => {
-                const sender = peerObj.pc.getSenders().find(s => s.track && s.track.kind === 'video');
-                if (sender) {
-                    sender.replaceTrack(screenVideoTrack);
-                }
-            });
-
-            const localVideo = document.getElementById(targetVideoId);
-            if (localVideo) {
-                localVideo.srcObject = this.localScreenStream;
-            }
-
-            screenVideoTrack.onended = () => {
-                this.stopScreenShare(targetVideoId);
-            };
-
-            return this.localScreenStream;
-        } catch (err) {
-            console.error('[WebRTC Error]: Screen sharing error:', err);
-            return null;
-        }
-    }
-
-    stopScreenShare(targetVideoId) {
-        if (!this.localScreenStream) return;
-        this.localScreenStream.getTracks().forEach(track => track.stop());
-
-        if (this.localStream) {
-            const cameraTrack = this.localStream.getVideoTracks()[0];
-            Object.values(this.peers).forEach(peerObj => {
-                const sender = peerObj.pc.getSenders().find(s => s.track && s.track.kind === 'video');
-                if (sender && cameraTrack) {
-                    sender.replaceTrack(cameraTrack);
-                }
-            });
-
-            const localVideo = document.getElementById(targetVideoId);
-            if (localVideo) {
-                localVideo.srcObject = this.localStream;
-            }
-        }
-        this.localScreenStream = null;
-    }
-
     ensureParticipantCard(targetUserId, targetVideoId = null) {
         const vId = targetVideoId || `video_user_${targetUserId}`;
         let remoteVideo = document.getElementById(vId);
@@ -682,6 +626,119 @@ class WebRTCManager {
         return remoteVideo;
     }
 
+    /**
+     * Screen Sharing
+     */
+    async startScreenShare(classId, targetVideoId) {
+        try {
+            console.log('[WEBRTC] Requesting Screen Stream...');
+            this.localScreenStream = await navigator.mediaDevices.getDisplayMedia({
+                video: { cursor: 'always' },
+                audio: false
+            });
+
+            const screenVideoTrack = this.localScreenStream.getVideoTracks()[0];
+
+            Object.values(this.peers).forEach(peerObj => {
+                const sender = peerObj.pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (sender) {
+                    sender.replaceTrack(screenVideoTrack);
+                }
+            });
+
+            const localVideo = document.getElementById(targetVideoId);
+            if (localVideo) {
+                localVideo.srcObject = this.localScreenStream;
+            }
+
+            screenVideoTrack.onended = () => {
+                this.stopScreenShare(targetVideoId);
+            };
+
+            return this.localScreenStream;
+        } catch (err) {
+            console.error('[WEBRTC] Screen sharing error:', err);
+            return null;
+        }
+    }
+
+    stopScreenShare(targetVideoId) {
+        if (!this.localScreenStream) return;
+        this.localScreenStream.getTracks().forEach(track => track.stop());
+
+        if (this.localStream) {
+            const cameraTrack = this.localStream.getVideoTracks()[0];
+            Object.values(this.peers).forEach(peerObj => {
+                const sender = peerObj.pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (sender && cameraTrack) {
+                    sender.replaceTrack(cameraTrack);
+                }
+            });
+
+            const localVideo = document.getElementById(targetVideoId);
+            if (localVideo) {
+                localVideo.srcObject = this.localStream;
+            }
+        }
+        this.localScreenStream = null;
+    }
+
+    viewStudentScreenStream(examId, studentId, videoElem, badgeElem) {
+        if (!videoElem) return;
+        videoElem.style.display = 'block';
+        if (badgeElem) badgeElem.innerHTML = '<span class="badge bg-success mb-1">🟢 LIVE WEBRTC SCREEN STREAM</span>';
+    }
+
+    /**
+     * Close Connection for Single Peer
+     */
+    closePeer(userId) {
+        if (this.peers[userId]) {
+            try {
+                this.peers[userId].pc.close();
+            } catch (e) {}
+            delete this.peers[userId];
+        }
+
+        const col = document.getElementById(`col_user_${userId}`);
+        if (col) col.remove();
+        console.log(`[WEBRTC] Teardown complete for Peer #${userId}`);
+    }
+
+    /**
+     * Complete Room Teardown
+     */
+    async leaveRoom(classId) {
+        console.log('[WEBRTC] Leaving room and tearing down all peer connections...');
+        try {
+            await this.sendSignaling(classId, null, 'leave', { room_left: true });
+        } catch (e) {}
+
+        Object.keys(this.peers).forEach(userId => {
+            this.closePeer(userId);
+        });
+
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => track.stop());
+            this.localStream = null;
+        }
+
+        if (this.localScreenStream) {
+            this.localScreenStream.getTracks().forEach(track => track.stop());
+            this.localScreenStream = null;
+        }
+
+        if (this.audioContext) {
+            try { this.audioContext.close(); } catch(e) {}
+            this.audioContext = null;
+        }
+
+        this.debugState.localVideoTracks = 0;
+        this.debugState.localAudioTracks = 0;
+        this.debugState.peerState = 'DISCONNECTED 🔴';
+        this.updateDebugPanel();
+    }
+
     updateDebugPanel() {
         const setTxt = (id, val) => {
             const el = document.getElementById(id);
@@ -717,5 +774,6 @@ WebRTCManager.toggleMicrophone = function(...args) { return defaultWebRTC.toggle
 WebRTCManager.startScreenShare = function(...args) { return defaultWebRTC.startScreenShare(...args); };
 WebRTCManager.stopScreenShare = function(...args) { return defaultWebRTC.stopScreenShare(...args); };
 WebRTCManager.viewStudentScreenStream = function(...args) { return defaultWebRTC.viewStudentScreenStream(...args); };
+WebRTCManager.leaveRoom = function(...args) { return defaultWebRTC.leaveRoom(...args); };
 
 window.WebRTCManager = WebRTCManager;

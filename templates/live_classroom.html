@@ -473,6 +473,20 @@
         startSignalingPolling();
         if (!isTeacher) startStudentRequestPolling();
 
+        // Broadcast JOIN signal to active room
+        try {
+            await window.webrtc.sendSignaling(classId, null, 'join', { user_id: currentUserId, role: isTeacher ? 'teacher' : 'student' });
+            console.log('[WEBRTC] Broadcasted JOIN signal');
+        } catch (e) {}
+
+        // Page unload teardown hook
+        window.addEventListener('beforeunload', () => {
+            if (window.webrtc) window.webrtc.leaveRoom(classId);
+        });
+        window.addEventListener('pagehide', () => {
+            if (window.webrtc) window.webrtc.leaveRoom(classId);
+        });
+
         // Auto-initialize local camera & microphone media on entry if available
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             try {
