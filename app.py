@@ -1279,7 +1279,8 @@ def webrtc_signaling():
         class_id = request.args.get('class_id', type=int, default=1)
         since_id = request.args.get('since_id', type=int, default=0)
 
-        query = {'class_id': class_id}
+        fifteen_mins_ago = datetime.utcnow() - timedelta(minutes=15)
+        query = {'class_id': class_id, 'timestamp': {'$gte': fifteen_mins_ago}}
         if since_id > 0:
             query['id'] = {'$gt': since_id}
 

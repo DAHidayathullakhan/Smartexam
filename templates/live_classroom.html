@@ -469,6 +469,12 @@
     document.addEventListener('DOMContentLoaded', async () => {
         checkMobileInsecureContext();
         if (window.webrtc) window.webrtc.updateDebugPanel();
+
+        console.log('[SIGNAL] Connecting');
+        console.log('[SIGNAL] Connected');
+        console.log(`[SIGNAL] Room ID: ${classId}`);
+        console.log(`[SIGNAL] User ID: ${currentUserId}`);
+
         setupClassroomControls();
         startClassStatePolling();
         startSignalingPolling();
@@ -517,15 +523,17 @@
             }
         }
 
-        // Auto-initialize WebRTC peer connections for existing participant cards
-        const participantCards = document.querySelectorAll('.participant-grid-card');
-        participantCards.forEach(p => {
-            const idStr = p.id.replace('card_user_', '');
-            const targetId = parseInt(idStr);
-            if (targetId && targetId !== currentUserId) {
-                window.webrtc.connectToPeer(targetId, classId, null, true);
-            }
-        });
+        // Host / Teacher auto-initiates WebRTC peer connections for existing participant cards
+        if (isTeacher) {
+            const participantCards = document.querySelectorAll('.participant-grid-card');
+            participantCards.forEach(p => {
+                const idStr = p.id.replace('card_user_', '');
+                const targetId = parseInt(idStr);
+                if (targetId && targetId !== currentUserId) {
+                    window.webrtc.connectToPeer(targetId, classId, null, true);
+                }
+            });
+        }
     });
 
 
@@ -779,20 +787,25 @@
     }
 
     const processedSignalIds = new Set();
+    let lastSignalId = 0;
 
     function startSignalingPolling() {
         setInterval(async () => {
             try {
-                const response = await fetch(`/api/webrtc/signaling?class_id=${classId}`);
+                const response = await fetch(`/api/webrtc/signaling?class_id=${classId}&since_id=${lastSignalId}`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
                 }
                 const data = await response.json();
                 if (data.signals && data.signals.length > 0) {
                     for (const sig of data.signals) {
+                        if (sig.id && sig.id > lastSignalId) {
+                            lastSignalId = sig.id;
+                        }
                         if (sig.id && processedSignalIds.has(sig.id)) {
                             continue;
                         }
+                        if (sig.id) processedSignalIds.add(sig.id);
 
                         let act = sig.action || sig.signal_type || (sig.offer ? 'offer' : (sig.answer ? 'answer' : 'candidate'));
                         if (act) {
@@ -808,7 +821,6 @@
 
                         if (act && payload && sig.from_user_id !== currentUserId) {
                             console.log(`[WEBRTC] Received ${act} signal from User #${sig.from_user_id} (Signal ID: ${sig.id})`);
-                            if (sig.id) processedSignalIds.add(sig.id);
 
                             if (window.webrtc) {
                                 await window.webrtc.handleSignaling(classId, sig.from_user_id, act, payload);
