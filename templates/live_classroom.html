@@ -107,25 +107,36 @@
         </div>
     </div>
 
-    <!-- DEVELOPMENT WEBRTC DEBUG PANEL -->
+    <!-- DEVELOPMENT WEBRTC DIAGNOSTIC PANEL -->
     <div class="collapse px-3 pt-2" id="webrtcDebugCollapse">
         <div class="webrtc-debug-panel p-3 shadow-lg">
-            <h6 class="fw-bold text-success mb-2"><i class="fa-solid fa-bug me-1"></i> WEBRTC REAL-TIME DIAGNOSTIC PANEL</h6>
+            <h6 class="fw-bold text-success mb-2"><i class="fa-solid fa-bug me-1"></i> WEBRTC / SFU REAL-TIME DIAGNOSTIC PANEL</h6>
             <div class="row g-2">
-                <div class="col-md-3 col-6">HTTPS Protocol: <strong id="dbgHttps" class="text-white">CHECKING...</strong></div>
-                <div class="col-md-3 col-6">Secure Context: <strong id="dbgSecureContext" class="text-white">CHECKING...</strong></div>
-                <div class="col-md-3 col-6">Camera Permission: <strong id="dbgCamPerm" class="text-white">NOT REQUESTED</strong></div>
-                <div class="col-md-3 col-6">Microphone Permission: <strong id="dbgMicPerm" class="text-white">NOT REQUESTED</strong></div>
-                <div class="col-md-3 col-6">Local Video Tracks: <strong id="dbgLocalVideoTracks" class="text-white">0</strong></div>
-                <div class="col-md-3 col-6">Local Audio Tracks: <strong id="dbgLocalAudioTracks" class="text-white">0</strong></div>
-                <div class="col-md-3 col-6">Peer Connection State: <strong id="dbgPeerState" class="text-warning">NEW</strong></div>
-                <div class="col-md-3 col-6">ICE Connection State: <strong id="dbgIceState" class="text-warning">NEW</strong></div>
-                <div class="col-md-3 col-6">Remote Video Tracks: <strong id="dbgRemoteVideoTracks" class="text-white">0</strong></div>
-                <div class="col-md-3 col-6">Remote Audio Tracks: <strong id="dbgRemoteAudioTracks" class="text-white">0</strong></div>
+                <div class="col-md-3 col-6">SIGNALING: <strong id="dbg_signaling" class="text-white">DISCONNECTED 🔴</strong></div>
+                <div class="col-md-3 col-6">MEDIA ENGINE: <strong id="dbg_media" class="text-white">IDLE ⚪</strong></div>
+                <div class="col-md-3 col-6">TEACHER AUDIO: <strong id="dbg_teacher_audio" class="text-white">NOT PUBLISHED 🔴</strong></div>
+                <div class="col-md-3 col-6">TEACHER VIDEO: <strong id="dbg_teacher_video" class="text-white">NOT PUBLISHED 🔴</strong></div>
+                <div class="col-md-3 col-6">REMOTE AUDIO: <strong id="dbg_remote_audio" class="text-white">NOT RECEIVED 🔴</strong></div>
+                <div class="col-md-3 col-6">REMOTE VIDEO: <strong id="dbg_remote_video" class="text-white">NOT RECEIVED 🔴</strong></div>
+                <div class="col-md-3 col-6">ROOM ID: <strong id="dbg_room" class="text-white">NONE</strong></div>
+                <div class="col-md-3 col-6">USER ROLE: <strong id="dbg_role" class="text-white">STUDENT</strong></div>
+                <div class="col-md-3 col-6">PARTICIPANTS: <strong id="dbg_participants" class="text-white">0</strong></div>
             </div>
         </div>
     </div>
 
+    <!-- Audio Autoplay Blocked Banner Overlay -->
+    <div id="audioAutoplayNoticeBanner" class="alert alert-warning border-0 rounded-0 m-0 py-2 px-4 d-flex align-items-center justify-content-between shadow" style="display: none !important; position: sticky; top: 0; z-index: 1050;">
+        <div class="d-flex align-items-center gap-2">
+            <i class="fa-solid fa-volume-high text-dark fs-4"></i>
+            <div>
+                <strong>Audio Playback Blocked:</strong> Your browser requires user interaction to enable live classroom audio playback.
+            </div>
+        </div>
+        <button type="button" class="btn btn-dark fw-bold px-3 py-1" onclick="window.webrtc.enableAudioInteraction()">
+            🔊 Enable Class Audio
+        </button>
+    </div>
 
     <!-- Mobile Browser Insecure Context Warning Banner -->
     <div id="mobileHttpsNoticeBanner" class="alert alert-warning border-0 rounded-0 m-0 py-2 px-4 d-flex align-items-center justify-content-between" style="display: none !important;">
@@ -455,35 +466,56 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.22.0.js"></script>
 <script src="{{ url_for('static', filename='js/webrtc.js') }}"></script>
 <script>
     const classId = {{ classroom.id }};
     const currentUserId = {{ current_user.id }};
     const isTeacher = {{ 'true' if current_user.role == 'teacher' else 'false' }};
     
-    let micOn = false;
-    let camOn = false;
+    let micOn = isTeacher;
+    let camOn = isTeacher;
     let screenSharing = false;
     let handRaised = false;
 
     document.addEventListener('DOMContentLoaded', async () => {
         checkMobileInsecureContext();
-        if (window.webrtc) window.webrtc.updateDebugPanel();
-
-        console.log('[SIGNAL] Connecting');
-        console.log('[SIGNAL] Connected');
-        console.log(`[SIGNAL] Room ID: ${classId}`);
-        console.log(`[SIGNAL] User ID: ${currentUserId}`);
-
         setupClassroomControls();
         startClassStatePolling();
         startSignalingPolling();
         if (!isTeacher) startStudentRequestPolling();
 
-        // Broadcast JOIN signal to active room
+        // Initialize Scalable SFU Engine (Teacher -> SFU -> 200+ Students)
+        try {
+            const localVidElemId = `video_user_${currentUserId}`;
+            const joined = await window.webrtc.joinRoomSFU(classId, currentUserId, isTeacher, localVidElemId);
+
+            if (joined && isTeacher) {
+                camOn = true;
+                micOn = true;
+                const myVideo = document.getElementById(localVidElemId);
+                const myAvatar = document.getElementById(`avatar_user_${currentUserId}`);
+                if (myVideo) myVideo.style.display = 'block';
+                if (myAvatar) myAvatar.style.display = 'none';
+
+                const camBtn = document.getElementById('btnToggleCam');
+                if (camBtn) {
+                    camBtn.className = 'btn btn-success px-3 py-2 fw-bold text-white';
+                    camBtn.innerHTML = '<i class="fa-solid fa-video me-1"></i> 🟢 CAMERA ON';
+                }
+                const micBtn = document.getElementById('btnToggleMic');
+                if (micBtn) {
+                    micBtn.className = 'btn btn-success px-3 py-2 fw-bold text-white';
+                    micBtn.innerHTML = '<i class="fa-solid fa-microphone me-1"></i> 🟢 MIC ON';
+                }
+            }
+        } catch (e) {
+            console.warn('[Classroom]: SFU initialization notice:', e);
+        }
+
+        // Broadcast JOIN signal
         try {
             await window.webrtc.sendSignaling(classId, null, 'join', { user_id: currentUserId, role: isTeacher ? 'teacher' : 'student' });
-            console.log('[WEBRTC] Broadcasted JOIN signal');
         } catch (e) {}
 
         // Page unload teardown hook
@@ -493,47 +525,6 @@
         window.addEventListener('pagehide', () => {
             if (window.webrtc) window.webrtc.leaveRoom(classId);
         });
-
-        // Auto-initialize local camera & microphone media on entry if available
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            try {
-                const cb = typeof handleSpeakingStateChange === 'function' ? handleSpeakingStateChange : null;
-                const stream = await window.webrtc.initLocalMedia(`video_user_${currentUserId}`, cb);
-                if (stream) {
-                    camOn = true;
-                    micOn = true;
-                    const myVideo = document.getElementById(`video_user_${currentUserId}`);
-                    const myAvatar = document.getElementById(`avatar_user_${currentUserId}`);
-                    if (myVideo) myVideo.style.display = 'block';
-                    if (myAvatar) myAvatar.style.display = 'none';
-
-                    const camBtn = document.getElementById('btnToggleCam');
-                    if (camBtn) {
-                        camBtn.className = 'btn btn-success px-3 py-2 fw-bold text-white';
-                        camBtn.innerHTML = '<i class="fa-solid fa-video me-1"></i> 🟢 CAMERA ON';
-                    }
-                    const micBtn = document.getElementById('btnToggleMic');
-                    if (micBtn) {
-                        micBtn.className = 'btn btn-success px-3 py-2 fw-bold text-white';
-                        micBtn.innerHTML = '<i class="fa-solid fa-microphone me-1"></i> 🟢 MIC ON';
-                    }
-                }
-            } catch (e) {
-                console.warn('[Classroom]: Auto media request warning:', e);
-            }
-        }
-
-        // Host / Teacher auto-initiates WebRTC peer connections for existing participant cards
-        if (isTeacher) {
-            const participantCards = document.querySelectorAll('.participant-grid-card');
-            participantCards.forEach(p => {
-                const idStr = p.id.replace('card_user_', '');
-                const targetId = parseInt(idStr);
-                if (targetId && targetId !== currentUserId) {
-                    window.webrtc.connectToPeer(targetId, classId, null, true);
-                }
-            });
-        }
     });
 
 

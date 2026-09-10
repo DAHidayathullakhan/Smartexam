@@ -1247,8 +1247,28 @@ def handle_404_json(e):
     return ("Page Not Found", 404)
 
 # -----------------------------------------------------------------------------
-# WEBRTC SIGNALING ENDPOINTS
+# WEBRTC & SFU LIVE CLASS ENDPOINTS
 # -----------------------------------------------------------------------------
+
+@app.route('/api/live-class/config', methods=['GET'])
+@login_required
+def live_class_config_api():
+    user = get_current_user()
+    class_id = request.args.get('class_id', type=int, default=1)
+    cls_doc = db_live_classes.find_one({'id': class_id})
+    teacher_id = cls_doc.get('teacher_id') if cls_doc else None
+    is_teacher = bool(user and (user.id == teacher_id or getattr(user, 'role', '') == 'teacher'))
+    app_id = os.getenv('AGORA_APP_ID', 'e3a79d060f644b9b9409890f9d92418e')
+    
+    return jsonify({
+        'success': True,
+        'app_id': app_id,
+        'channel': f"smartexam_class_{class_id}",
+        'user_id': user.id,
+        'role': 'publisher' if is_teacher else 'subscriber',
+        'is_teacher': is_teacher,
+        'class_id': class_id
+    })
 
 @app.route('/api/webrtc/signal', methods=['GET', 'POST'])
 @app.route('/api/webrtc/signaling', methods=['GET', 'POST'])
